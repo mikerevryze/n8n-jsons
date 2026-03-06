@@ -1,0 +1,222 @@
+{
+  "name": "Momentic_Meta_Lakeview_to_Snowflake",
+  "nodes": [
+    {
+      "parameters": {
+        "url": "https://graph.facebook.com/v21.0/act_1969375150655104/insights",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "facebookGraphApi",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "level",
+              "value": "ad"
+            },
+            {
+              "name": "time_range[since]",
+              "value": "2025-01-01"
+            },
+            {
+              "name": "time_range[until]",
+              "value": "={{ $now.format('yyyy-MM-dd') }}"
+            },
+            {
+              "name": "time_increment",
+              "value": "1"
+            },
+            {
+              "name": "fields",
+              "value": "account_id,account_currency,date_start,date_stop,campaign_id,campaign_name,adset_id,adset_name,ad_id,ad_name,impressions,clicks,spend,actions"
+            },
+            {
+              "name": "limit",
+              "value": "500"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [944, 80],
+      "id": "d5d8e9fe-e796-4c29-afd5-3ebf3bb02d9c",
+      "name": "Fetch Meta Insights",
+      "alwaysOutputData": true,
+      "credentials": {
+        "facebookGraphApi": {
+          "id": "bXOSJDHOkudOdJj3",
+          "name": "Meta - Revryze System User"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "cond-has-data-001",
+              "leftValue": "={{ ($json.data || []).length }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [1168, 80],
+      "id": "f7cec1b6-6a00-4301-9818-397b6b8fb6d7",
+      "name": "Has Data?"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Build a single batch MERGE SQL from ALL rows in the API response\nconst response = $input.first().json;\nconst rows = response.data || [];\nconst pulledAt = new Date().toISOString();\n\nfunction getAction(actions, type) {\n  const a = (actions || []).find(x => x.action_type === type);\n  return a ? Number(a.value) : 0;\n}\n\nfunction esc(s) {\n  return String(s || '').replace(/'/g, \"''\");\n}\n\nconst selects = rows.map(r => {\n  const leads =\n    getAction(r.actions, 'lead') +\n    getAction(r.actions, 'onsite_conversion.lead_grouped') +\n    getAction(r.actions, 'offsite_conversion.fb_pixel_lead');\n\n  return `SELECT\n    TRY_TO_TIMESTAMP_NTZ('${pulledAt}') AS PULLED_AT,\n    TO_DATE('${r.date_start}') AS DATE_START,\n    TO_DATE('${r.date_stop}') AS DATE_STOP,\n    '${esc(r.account_id)}' AS AD_ACCOUNT_ID,\n    '${esc(r.account_currency)}' AS CURRENCY,\n    'ad' AS LEVEL,\n    '${esc(r.campaign_id)}' AS CAMPAIGN_ID,\n    '${esc(r.campaign_name)}' AS CAMPAIGN_NAME,\n    '${esc(r.adset_id)}' AS ADSET_ID,\n    '${esc(r.adset_name)}' AS ADSET_NAME,\n    '${esc(r.ad_id)}' AS AD_ID,\n    '${esc(r.ad_name)}' AS AD_NAME,\n    ${Number(r.impressions || 0)} AS IMPRESSIONS,\n    ${Number(r.clicks || 0)} AS CLICKS,\n    ${Number(r.spend || 0)} AS SPEND,\n    ${leads} AS LEADS,\n    0 AS PURCHASES`;\n}).join('\\n  UNION ALL\\n');\n\nconst sql = `MERGE INTO REVRYZE.RAW.META_ADS_DAILY t\nUSING (\n  ${selects}\n) s\nON  t.DATE_START     = s.DATE_START\nAND t.AD_ACCOUNT_ID  = s.AD_ACCOUNT_ID\nAND t.AD_ID          = s.AD_ID\n\nWHEN MATCHED THEN UPDATE SET\n  PULLED_AT     = s.PULLED_AT,\n  DATE_STOP     = s.DATE_STOP,\n  CURRENCY      = s.CURRENCY,\n  LEVEL         = s.LEVEL,\n  CAMPAIGN_ID   = s.CAMPAIGN_ID,\n  CAMPAIGN_NAME = s.CAMPAIGN_NAME,\n  ADSET_ID      = s.ADSET_ID,\n  ADSET_NAME    = s.ADSET_NAME,\n  AD_NAME       = s.AD_NAME,\n  IMPRESSIONS   = s.IMPRESSIONS,\n  CLICKS        = s.CLICKS,\n  SPEND         = s.SPEND,\n  LEADS         = s.LEADS,\n  PURCHASES     = s.PURCHASES\n\nWHEN NOT MATCHED THEN INSERT (\n  PULLED_AT, DATE_START, DATE_STOP, AD_ACCOUNT_ID, CURRENCY, LEVEL,\n  CAMPAIGN_ID, CAMPAIGN_NAME, ADSET_ID, ADSET_NAME, AD_ID, AD_NAME,\n  IMPRESSIONS, CLICKS, SPEND, LEADS, PURCHASES\n)\nVALUES (\n  s.PULLED_AT, s.DATE_START, s.DATE_STOP, s.AD_ACCOUNT_ID, s.CURRENCY, s.LEVEL,\n  s.CAMPAIGN_ID, s.CAMPAIGN_NAME, s.ADSET_ID, s.ADSET_NAME, s.AD_ID, s.AD_NAME,\n  s.IMPRESSIONS, s.CLICKS, s.SPEND, s.LEADS, s.PURCHASES\n);`;\n\nconst nextUrl = response?.paging?.next || '';\n\nreturn [{ json: { sql, row_count: rows.length, next_url: nextUrl } }];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1392, 80],
+      "id": "e5323fa6-faba-409a-bebf-f9b2ac57addd",
+      "name": "Build Batch SQL"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "{{$json.sql}}"
+      },
+      "type": "n8n-nodes-base.snowflake",
+      "typeVersion": 1,
+      "position": [1600, 80],
+      "id": "e47a04f2-1e02-4e33-8819-fdd159b1053b",
+      "name": "Snowflake",
+      "credentials": {
+        "snowflake": {
+          "id": "lSGl0Euzea9Zvmt7",
+          "name": "Snowflake account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "cond-more-pages-001",
+              "leftValue": "={{ ($('Build Batch SQL').first().json.next_url || '').length }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [1824, 80],
+      "id": "1314ada2-9e6d-499c-b9a6-980864c2cbb3",
+      "name": "More Pages?"
+    },
+    {
+      "parameters": {
+        "url": "={{ $('Build Batch SQL').first().json.next_url }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [2048, 80],
+      "id": "643fce1a-50dc-41aa-ad8d-987120ecbbae",
+      "name": "Fetch Next Page",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "errorType": "=errorMessage",
+        "errorMessage": "={{ \"No data returned from Meta Ads API — check token validity and ad account permissions\" }}"
+      },
+      "type": "n8n-nodes-base.stopAndError",
+      "typeVersion": 1,
+      "position": [1392, 240],
+      "id": "a2c67e16-b74e-44b4-b607-64c43479a612",
+      "name": "No Data"
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 4
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [576, 80],
+      "id": "e0c680bf-5358-498f-b740-448a0c5eb109",
+      "name": "Schedule Trigger"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Fetch Meta Insights": {
+      "main": [[{ "node": "Has Data?", "type": "main", "index": 0 }]]
+    },
+    "Has Data?": {
+      "main": [
+        [{ "node": "Build Batch SQL", "type": "main", "index": 0 }],
+        [{ "node": "No Data", "type": "main", "index": 0 }]
+      ]
+    },
+    "Build Batch SQL": {
+      "main": [[{ "node": "Snowflake", "type": "main", "index": 0 }]]
+    },
+    "Snowflake": {
+      "main": [[{ "node": "More Pages?", "type": "main", "index": 0 }]]
+    },
+    "More Pages?": {
+      "main": [
+        [{ "node": "Fetch Next Page", "type": "main", "index": 0 }]
+      ]
+    },
+    "Fetch Next Page": {
+      "main": [[{ "node": "Has Data?", "type": "main", "index": 0 }]]
+    },
+    "Schedule Trigger": {
+      "main": [[{ "node": "Fetch Meta Insights", "type": "main", "index": 0 }]]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "f2cd0164-9d99-480a-a5a1-b795ea1c9d42",
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "id": "e8d7be28-e953-4392-a1ab-ac81fe3e5ac4",
+  "tags": []
+}
