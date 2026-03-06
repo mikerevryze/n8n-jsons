@@ -1,0 +1,276 @@
+{
+  "name": "Momentic_GHL_Data_Opportunities",
+  "nodes": [
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "a7d3dce4-1284-4322-9737-59a162c332da",
+              "name": "page",
+              "value": 1,
+              "type": "number"
+            },
+            {
+              "id": "26026424-64e7-4d00-bdf6-0cdba8e4185c",
+              "name": "limit",
+              "value": 100,
+              "type": "number"
+            },
+            {
+              "id": "bed1e39a-c518-4e59-a45c-d15c3e5b10ec",
+              "name": "locationId",
+              "value": "9oW28j2SxdPAmUhO5MDI",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [544, 96],
+      "id": "3a345d09-d6d4-4c8c-8bac-746cf191fc5c",
+      "name": "Edit Fields"
+    },
+    {
+      "parameters": {
+        "url": "https://services.leadconnectorhq.com/opportunities/pipelines",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "locationId",
+              "value": "={{ $json.locationId }}"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer pit-7af79179-2a7e-455f-a685-1b7c15d55547"
+            },
+            {
+              "name": "Version",
+              "value": "2021-07-28"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [720, 96],
+      "id": "7dc290b1-632a-4f4a-b5ef-9324a5aeabd8",
+      "name": "Fetch Pipelines"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Build pipeline/stage ID-to-Name lookup maps from the API response.\n// Pass through pagination data from Edit Fields so the loop works.\nconst pipelinesData = $input.first().json;\nconst pipelines = pipelinesData.pipelines || [];\nconst stageMap = {};\nconst pipelineMap = {};\n\nfor (const p of pipelines) {\n  pipelineMap[p.id] = p.name;\n  for (const s of (p.stages || [])) {\n    stageMap[s.id] = s.name;\n  }\n}\n\nconst editFields = $('Edit Fields').first().json;\nreturn [{\n  json: {\n    page: editFields.page,\n    limit: editFields.limit,\n    locationId: editFields.locationId,\n    _pipelineMap: pipelineMap,\n    _stageMap: stageMap\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [880, 96],
+      "id": "11facecb-3dc0-4cda-ab00-809cd0cd9568",
+      "name": "Build Pipe Map"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Build the HTTP request body with guaranteed correct types.\nconst page = Number($input.first().json.page);\nconst limit = Number($input.first().json.limit);\nconst locationId = String($input.first().json.locationId);\n\nreturn [{\n  json: {\n    locationId: locationId,\n    limit: limit,\n    page: page\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1056, 96],
+      "id": "4cfd9d5b-742d-4774-9b4f-b58a0849361b",
+      "name": "Build Request Body"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://services.leadconnectorhq.com/opportunities/search",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer pit-7af79179-2a7e-455f-a685-1b7c15d55547"
+            },
+            {
+              "name": "Version",
+              "value": "2021-07-28"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ locationId: $json.locationId, limit: Number($json.limit), page: Number($json.page) }) }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [1216, 96],
+      "id": "1d828da1-7e2c-478e-bb72-ee9d21319e09",
+      "name": "HTTP Request",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "6c007be2-a8ee-45a9-a74a-f6ac7f7731ba",
+              "leftValue": "={{ ($json.opportunities || []).length }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [1376, 96],
+      "id": "d9272068-521d-4f23-aa60-e830798ba139",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "opportunities",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [1552, 80],
+      "id": "79a7322b-fb91-4350-bcf8-835fa30f9135",
+      "name": "Split Out"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Resolve pipeline & stage names using the lookup from Build Pipe Map\nconst maps = $('Build Pipe Map').first().json;\nconst pipelineMap = maps._pipelineMap || {};\nconst stageMap = maps._stageMap || {};\n\nreturn items.map(item => {\n  const o = item.json;\n\n  const safeStr = (v) => {\n    if (v === undefined || v === null) return null;\n    if (typeof v === 'string') {\n      const s = v.trim();\n      if (s === '' || s.toLowerCase() === 'null') return null;\n      return s;\n    }\n    return String(v);\n  };\n\n  const safeNum = (v) => {\n    if (v === undefined || v === null) return null;\n    if (typeof v === 'number') return v;\n    const s = String(v).trim();\n    if (s === '' || s.toLowerCase() === 'null') return null;\n    const n = Number(s);\n    return Number.isFinite(n) ? n : null;\n  };\n\n  return {\n    json: {\n      client_id: \"momentic\",\n\n      opportunity_id: safeStr(o.id ?? o.opportunityId),\n      location_id: safeStr(o.locationId),\n      contact_id: safeStr(o.contactId),\n\n      pipeline_id: safeStr(o.pipelineId),\n      pipeline_stage_id: safeStr(o.pipelineStageId),\n      pipeline_name: pipelineMap[o.pipelineId] || null,\n      pipeline_stage_name: stageMap[o.pipelineStageId] || null,\n\n      status: safeStr(o.status),\n      name: safeStr(o.name),\n\n      monetary_value: safeNum(o.monetaryValue ?? o.value),\n\n      created_at_str: safeStr(o.createdAt),\n      updated_at_str: safeStr(o.updatedAt),\n      closed_at_str: safeStr(o.closedAt),\n\n      raw: JSON.stringify(o).replace(/'/g, \"''\"),\n      pulled_at_ts: new Date().toISOString()\n    }\n  };\n});\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1744, 144],
+      "id": "0c3cd7e9-e3c9-411f-969f-a26f142538bb",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "MERGE INTO REVRYZE.RAW.GHL_OPPORTUNITIES t\nUSING (\n  SELECT\n    'momentic' AS CLIENT_ID,\n\n    NULLIF(NULLIF('{{$json.opportunity_id}}', 'null'), '') AS OPPORTUNITY_ID,\n    NULLIF(NULLIF('{{$json.location_id}}', 'null'), '') AS LOCATION_ID,\n    NULLIF(NULLIF('{{$json.contact_id}}', 'null'), '') AS CONTACT_ID,\n\n    NULLIF(NULLIF('{{$json.pipeline_id}}', 'null'), '') AS PIPELINE_ID,\n    NULLIF(NULLIF('{{$json.pipeline_stage_id}}', 'null'), '') AS PIPELINE_STAGE_ID,\n    NULLIF(NULLIF(REPLACE('{{$json.pipeline_name}}', '''', ''''''), 'null'), '') AS PIPELINE_NAME,\n    NULLIF(NULLIF(REPLACE('{{$json.pipeline_stage_name}}', '''', ''''''), 'null'), '') AS PIPELINE_STAGE_NAME,\n\n    NULLIF(NULLIF(REPLACE('{{$json.status}}', '''', ''''''), 'null'), '') AS STATUS,\n    NULLIF(NULLIF(REPLACE('{{$json.name}}', '''', ''''''), 'null'), '') AS NAME,\n\n    TRY_TO_NUMBER(NULLIF(NULLIF('{{$json.monetary_value}}', 'null'), ''), 18, 2) AS MONETARY_VALUE,\n\n    NULLIF(NULLIF('{{$json.created_at_str}}', 'null'), '') AS CREATED_AT_STR,\n    TRY_TO_TIMESTAMP_NTZ(NULLIF(NULLIF('{{$json.created_at_str}}', 'null'), '')) AS CREATED_AT_TS,\n\n    NULLIF(NULLIF('{{$json.updated_at_str}}', 'null'), '') AS UPDATED_AT_STR,\n    TRY_TO_TIMESTAMP_NTZ(NULLIF(NULLIF('{{$json.updated_at_str}}', 'null'), '')) AS UPDATED_AT_TS,\n\n    NULLIF(NULLIF('{{$json.closed_at_str}}', 'null'), '') AS CLOSED_AT_STR,\n    TRY_TO_TIMESTAMP_NTZ(NULLIF(NULLIF('{{$json.closed_at_str}}', 'null'), '')) AS CLOSED_AT_TS,\n\n    TRY_PARSE_JSON('{{$json.raw}}') AS RAW,\n    TRY_TO_TIMESTAMP_NTZ(NULLIF(NULLIF('{{$json.pulled_at_ts}}', 'null'), '')) AS PULLED_AT_TS\n) s\n\nON t.OPPORTUNITY_ID = s.OPPORTUNITY_ID\n\nWHEN MATCHED THEN UPDATE SET\n  LOCATION_ID = s.LOCATION_ID,\n  CONTACT_ID = s.CONTACT_ID,\n  PIPELINE_ID = s.PIPELINE_ID,\n  PIPELINE_STAGE_ID = s.PIPELINE_STAGE_ID,\n  PIPELINE_NAME = s.PIPELINE_NAME,\n  PIPELINE_STAGE_NAME = s.PIPELINE_STAGE_NAME,\n  STATUS = s.STATUS,\n  NAME = s.NAME,\n  MONETARY_VALUE = s.MONETARY_VALUE,\n  UPDATED_AT_STR = s.UPDATED_AT_STR,\n  UPDATED_AT_TS = s.UPDATED_AT_TS,\n  CLOSED_AT_STR = s.CLOSED_AT_STR,\n  CLOSED_AT_TS = s.CLOSED_AT_TS,\n  RAW = s.RAW,\n  PULLED_AT_TS = s.PULLED_AT_TS\n\nWHEN NOT MATCHED THEN INSERT (\n  CLIENT_ID,\n  OPPORTUNITY_ID,\n  LOCATION_ID,\n  CONTACT_ID,\n  PIPELINE_ID,\n  PIPELINE_STAGE_ID,\n  PIPELINE_NAME,\n  PIPELINE_STAGE_NAME,\n  STATUS,\n  NAME,\n  MONETARY_VALUE,\n  CREATED_AT_STR,\n  CREATED_AT_TS,\n  UPDATED_AT_STR,\n  UPDATED_AT_TS,\n  CLOSED_AT_STR,\n  CLOSED_AT_TS,\n  RAW,\n  PULLED_AT_TS\n)\nVALUES (\n  s.CLIENT_ID,\n  s.OPPORTUNITY_ID,\n  s.LOCATION_ID,\n  s.CONTACT_ID,\n  s.PIPELINE_ID,\n  s.PIPELINE_STAGE_ID,\n  s.PIPELINE_NAME,\n  s.PIPELINE_STAGE_NAME,\n  s.STATUS,\n  s.NAME,\n  s.MONETARY_VALUE,\n  s.CREATED_AT_STR,\n  s.CREATED_AT_TS,\n  s.UPDATED_AT_STR,\n  s.UPDATED_AT_TS,\n  s.CLOSED_AT_STR,\n  s.CLOSED_AT_TS,\n  s.RAW,\n  s.PULLED_AT_TS\n);\n"
+      },
+      "type": "n8n-nodes-base.snowflake",
+      "typeVersion": 1,
+      "position": [1952, 208],
+      "id": "44cf1d31-4a31-448d-a46f-65977f0fb460",
+      "name": "Snowflake",
+      "credentials": {
+        "snowflake": {
+          "id": "lSGl0Euzea9Zvmt7",
+          "name": "Snowflake account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// After Snowflake processes all items from this page,\n// prepare pagination state for the next page.\nconst currentPage = $('Build Request Body').first().json.page;\nconst limit = $('Build Request Body').first().json.limit;\nconst locationId = $('Build Request Body').first().json.locationId;\n\nreturn [{\n  json: {\n    page: currentPage + 1,\n    limit: limit,\n    locationId: locationId\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2160, 320],
+      "id": "c6f058a3-6b23-4b47-87a2-5a4f5ccae2c1",
+      "name": "Next Page"
+    },
+    {
+      "parameters": {
+        "errorType": "=errorMessage",
+        "errorMessage": "={{ \"No more pages returned from API\" }}"
+      },
+      "type": "n8n-nodes-base.stopAndError",
+      "typeVersion": 1,
+      "position": [1552, 240],
+      "id": "42599594-ddb9-4300-bf37-e467cb5ba7be",
+      "name": "Stop and Error"
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 4
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [288, 112],
+      "id": "d1101ee3-f116-4e12-b19c-ef65186d7964",
+      "name": "Schedule Trigger"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Edit Fields": {
+      "main": [[{ "node": "Fetch Pipelines", "type": "main", "index": 0 }]]
+    },
+    "Fetch Pipelines": {
+      "main": [[{ "node": "Build Pipe Map", "type": "main", "index": 0 }]]
+    },
+    "Build Pipe Map": {
+      "main": [[{ "node": "Build Request Body", "type": "main", "index": 0 }]]
+    },
+    "Build Request Body": {
+      "main": [[{ "node": "HTTP Request", "type": "main", "index": 0 }]]
+    },
+    "HTTP Request": {
+      "main": [[{ "node": "If", "type": "main", "index": 0 }]]
+    },
+    "If": {
+      "main": [
+        [{ "node": "Split Out", "type": "main", "index": 0 }],
+        [{ "node": "Stop and Error", "type": "main", "index": 0 }]
+      ]
+    },
+    "Split Out": {
+      "main": [[{ "node": "Code in JavaScript", "type": "main", "index": 0 }]]
+    },
+    "Code in JavaScript": {
+      "main": [[{ "node": "Snowflake", "type": "main", "index": 0 }]]
+    },
+    "Snowflake": {
+      "main": [[{ "node": "Next Page", "type": "main", "index": 0 }]]
+    },
+    "Next Page": {
+      "main": [[{ "node": "Build Request Body", "type": "main", "index": 0 }]]
+    },
+    "Schedule Trigger": {
+      "main": [[{ "node": "Edit Fields", "type": "main", "index": 0 }]]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "3f835ffa-3a5d-48a6-b38d-bc04033c04cd",
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "id": "42e5d6eb-bddb-430e-a701-062e0bff0221",
+  "tags": []
+}
