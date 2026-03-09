@@ -1,0 +1,143 @@
+{
+  "name": "Revryze_Presale_Survival_Test",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "presale-survival-test",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [240, 300],
+      "id": "a1b2c3d4-0001-4000-8000-000000000001",
+      "name": "Webhook",
+      "webhookId": "presale-survival-test"
+    },
+    {
+      "parameters": {
+        "jsCode": "const d = $input.first().json.body;\n\n// Determine survival tier\nconst score = parseFloat(d.survivalScore) || 0;\nlet tier = 'Critical';\nlet tierColor = '#dc2626';\nif (score >= 75) { tier = 'Healthy'; tierColor = '#16a34a'; }\nelse if (score >= 50) { tier = 'Marginal'; tierColor = '#f59e0b'; }\nelse if (score >= 25) { tier = 'Danger'; tierColor = '#ea580c'; }\n\nconst projectedMembers = parseInt(d.projectedMembers) || 0;\nconst openingMRR = parseFloat(d.openingMRR) || 0;\nconst opexCoverage = parseFloat(d.opexCoverage) || 0;\nconst recoveryMembers = parseInt(d.recoveryMembers) || 0;\nconst recoveryMRR = parseFloat(d.recoveryMRR) || 0;\nconst recoveryLTV = parseFloat(d.recoveryLTV) || 0;\nconst monthlyOpex = parseFloat(d.monthlyOpex) || 0;\n\nconst html = `<!DOCTYPE html>\n<html>\n<head>\n<meta charset=\"utf-8\">\n<style>\n  body { font-family: Arial, Helvetica, sans-serif; margin: 0; padding: 0; color: #1e293b; }\n  .container { max-width: 640px; margin: 0 auto; padding: 40px 32px; }\n  .header { text-align: center; margin-bottom: 32px; }\n  .header h1 { font-size: 22px; color: #0f172a; margin: 0 0 4px; }\n  .header p { font-size: 13px; color: #64748b; margin: 0; }\n  .section { margin-bottom: 24px; }\n  .section h2 { font-size: 15px; color: #334155; border-bottom: 2px solid #e2e8f0; padding-bottom: 6px; margin: 0 0 12px; }\n  .row { display: flex; justify-content: space-between; padding: 6px 0; font-size: 14px; }\n  .row .label { color: #64748b; }\n  .row .value { font-weight: 600; color: #0f172a; }\n  .tier-badge { display: inline-block; padding: 6px 18px; border-radius: 20px; color: #fff; font-weight: 700; font-size: 16px; background: ${tierColor}; }\n  .tier-box { text-align: center; margin: 16px 0; }\n  .bar-track { background: #e2e8f0; border-radius: 6px; height: 14px; margin-top: 4px; }\n  .bar-fill { height: 14px; border-radius: 6px; }\n  .cta { text-align: center; margin-top: 32px; padding: 20px; background: #f8fafc; border-radius: 8px; }\n  .cta p { margin: 0; font-size: 14px; color: #334155; }\n</style>\n</head>\n<body>\n<div class=\"container\">\n\n  <div class=\"header\">\n    <h1>Presale Survival Test Results</h1>\n    <p>Prepared for ${d.name || 'N/A'} &mdash; ${d.role || 'N/A'} at ${d.brandName || 'N/A'}</p>\n  </div>\n\n  <div class=\"section\">\n    <h2>Contact Details</h2>\n    <div class=\"row\"><span class=\"label\">Email</span><span class=\"value\">${d.email || 'N/A'}</span></div>\n    <div class=\"row\"><span class=\"label\">Phone</span><span class=\"value\">${d.phone || 'N/A'}</span></div>\n    <div class=\"row\"><span class=\"label\">LinkedIn</span><span class=\"value\">${d.linkedin || 'N/A'}</span></div>\n  </div>\n\n  <div class=\"section\">\n    <h2>Business Profile</h2>\n    <div class=\"row\"><span class=\"label\">Unit Count</span><span class=\"value\">${d.unitCount || 'N/A'}</span></div>\n    <div class=\"row\"><span class=\"label\">Ad Spend</span><span class=\"value\">$${parseFloat(d.adSpend || 0).toLocaleString()}</span></div>\n    <div class=\"row\"><span class=\"label\">Population Density</span><span class=\"value\">${d.populationDensity || 'N/A'}</span></div>\n    <div class=\"row\"><span class=\"label\">B2B Leads</span><span class=\"value\">${d.b2bLeads || 'N/A'}</span></div>\n    <div class=\"row\"><span class=\"label\">Close Rate</span><span class=\"value\">${d.closeRate || 'N/A'}%</span></div>\n    <div class=\"row\"><span class=\"label\">Membership Value</span><span class=\"value\">$${parseFloat(d.membershipValue || 0).toLocaleString()}</span></div>\n    <div class=\"row\"><span class=\"label\">Member Lifetime</span><span class=\"value\">${d.memberLifetime || 'N/A'} months</span></div>\n    <div class=\"row\"><span class=\"label\">Monthly OPEX</span><span class=\"value\">$${monthlyOpex.toLocaleString()}</span></div>\n  </div>\n\n  <div class=\"section\">\n    <h2>Survival Score</h2>\n    <div class=\"tier-box\"><span class=\"tier-badge\">${score}/100 &mdash; ${tier}</span></div>\n    <div class=\"bar-track\"><div class=\"bar-fill\" style=\"width:${score}%; background:${tierColor};\"></div></div>\n  </div>\n\n  <div class=\"section\">\n    <h2>Key Metrics</h2>\n    <div class=\"row\"><span class=\"label\">Projected Members</span><span class=\"value\">${projectedMembers} / 200 target</span></div>\n    <div class=\"row\"><span class=\"label\">Opening MRR</span><span class=\"value\">$${openingMRR.toLocaleString()} / $30,000 threshold</span></div>\n    <div class=\"row\"><span class=\"label\">OPEX Coverage</span><span class=\"value\">${opexCoverage}%</span></div>\n    <div class=\"row\"><span class=\"label\">MRR vs Threshold</span><span class=\"value\">${d.mrrVsThreshold || 'N/A'}</span></div>\n    <div class=\"row\"><span class=\"label\">Cash Position</span><span class=\"value\">${d.cashPosition || 'N/A'}</span></div>\n  </div>\n\n  <div class=\"section\">\n    <h2>Revenue Recovery Potential</h2>\n    <div class=\"row\"><span class=\"label\">Recovery Members</span><span class=\"value\">${recoveryMembers}</span></div>\n    <div class=\"row\"><span class=\"label\">Recovery MRR</span><span class=\"value\">$${recoveryMRR.toLocaleString()}</span></div>\n    <div class=\"row\"><span class=\"label\">Recovery LTV</span><span class=\"value\">$${recoveryLTV.toLocaleString()}</span></div>\n  </div>\n\n  <div class=\"cta\">\n    <p><strong>Booked a call with Revryze to review your results.</strong></p>\n  </div>\n\n</div>\n</body>\n</html>`;\n\nreturn [{\n  json: {\n    html,\n    email: d.email,\n    name: d.name,\n    brandName: d.brandName\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [480, 300],
+      "id": "a1b2c3d4-0002-4000-8000-000000000002",
+      "name": "Build HTML Report"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://html2pdf.app/api/v1/generate",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ html: $json.html, width: 816, height: 1056 }) }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [720, 300],
+      "id": "a1b2c3d4-0003-4000-8000-000000000003",
+      "name": "Generate PDF"
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $('Build HTML Report').item.json.email }}",
+        "subject": "=Your Presale Survival Test Results — {{ $('Build HTML Report').item.json.brandName }}",
+        "message": "=Hi {{ $('Build HTML Report').item.json.name }},\n\nAttached are your audit results from the Revryze Presale Survival Test.\n\nTalk soon.",
+        "options": {
+          "attachmentsUi": {
+            "attachmentsBinary": [
+              {
+                "property": "data"
+              }
+            ]
+          },
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [960, 300],
+      "id": "a1b2c3d4-0004-4000-8000-000000000004",
+      "name": "Send Email",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "REPLACE_WITH_YOUR_GMAIL_CREDENTIAL_ID",
+          "name": "Gmail OAuth2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ success: true, message: 'Report sent to ' + $('Build HTML Report').item.json.email }) }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1200, 300],
+      "id": "a1b2c3d4-0005-4000-8000-000000000005",
+      "name": "Respond to Webhook"
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Build HTML Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build HTML Report": {
+      "main": [
+        [
+          {
+            "node": "Generate PDF",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate PDF": {
+      "main": [
+        [
+          {
+            "node": "Send Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Email": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 1
+}
