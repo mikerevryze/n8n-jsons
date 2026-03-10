@@ -63,7 +63,7 @@
         "url": "https://api.html2pdf.app/v1/generate",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ html: $json.auditHtml, apiKey: 'demo', format: 'A4', marginTop: '0', marginBottom: '0' }) }}",
+        "jsonBody": "={{ JSON.stringify({ html: $json.auditHtml, apiKey: 'REPLACE_WITH_YOUR_HTML2PDF_API_KEY', format: 'A4', marginTop: '0', marginBottom: '0' }) }}",
         "options": {
           "response": {
             "response": {
@@ -95,7 +95,7 @@
         "url": "https://api.html2pdf.app/v1/generate",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ html: $json.combinedHtml, apiKey: 'demo', format: 'A4', marginTop: '0', marginBottom: '0' }) }}",
+        "jsonBody": "={{ JSON.stringify({ html: $json.combinedHtml, apiKey: 'REPLACE_WITH_YOUR_HTML2PDF_API_KEY', format: 'A4', marginTop: '0', marginBottom: '0' }) }}",
         "options": {
           "response": {
             "response": {
