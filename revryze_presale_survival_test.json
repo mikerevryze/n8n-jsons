@@ -10,19 +10,25 @@
       },
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
-      "position": [240, 300],
-      "id": "b0000001-0001-4000-8000-000000000001",
+      "position": [
+        944,
+        96
+      ],
+      "id": "d17a6619-bef8-4f54-8301-c66d69ddf38a",
       "name": "Webhook",
       "webhookId": "presale-survival-test"
     },
     {
       "parameters": {
-        "jsCode": "const webhookData = $('Webhook').first().json;\nconst d = webhookData.body ? webhookData.body : webhookData;\n\n// Determine scoreClass from survivalScore\nconst scoreRaw = String(d.survivalScore || '').trim();\nlet scoreClass = 'critical';\nconst scoreLower = scoreRaw.toLowerCase();\nif (scoreLower === 'healthy') scoreClass = 'healthy';\nelse if (scoreLower === 'marginal') scoreClass = 'marginal';\nelse if (scoreLower === 'danger') scoreClass = 'danger';\nelse if (scoreLower === 'critical') scoreClass = 'critical';\nelse {\n  const num = parseFloat(scoreRaw);\n  if (!isNaN(num)) {\n    if (num >= 75) scoreClass = 'healthy';\n    else if (num >= 50) scoreClass = 'marginal';\n    else if (num >= 25) scoreClass = 'danger';\n  }\n}\n\nconst auditHtml = `<!DOCTYPE html>\n<html>\n<head>\n<meta charset=\"utf-8\">\n<style>\n  body { font-family: Inter, Arial, Helvetica, sans-serif; background: #06060b; color: #ffffff; padding: 40px; margin: 0; }\n  .header { text-align: center; margin-bottom: 40px; }\n  .logo { color: #00FF87; font-size: 32px; font-weight: 900; letter-spacing: -1px; }\n  .title { color: #ffffff; font-size: 22px; margin-top: 8px; }\n  .subtitle { color: rgba(255,255,255,0.6); font-size: 14px; }\n  .section { background: #181828; border-radius: 12px; padding: 24px; margin-bottom: 20px; }\n  .section-title { color: #00FF87; font-size: 12px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; margin-bottom: 16px; }\n  .metric-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }\n  .metric { background: #06060b; border-radius: 8px; padding: 16px; }\n  .metric-label { color: rgba(255,255,255,0.5); font-size: 11px; text-transform: uppercase; letter-spacing: 1px; }\n  .metric-value { font-size: 28px; font-weight: 700; font-family: monospace; margin-top: 4px; }\n  .healthy { color: #00FF87; }\n  .marginal { color: #ffa726; }\n  .danger { color: #ff3d71; }\n  .critical { color: #ff1744; }\n  .comparison-table { width: 100%; border-collapse: collapse; }\n  .comparison-table th { color: rgba(255,255,255,0.5); font-size: 11px; text-transform: uppercase; padding: 8px 12px; text-align: left; }\n  .comparison-table td { padding: 12px; border-top: 1px solid #2a2a3a; font-size: 14px; }\n  .comparison-table .with-revryze { color: #00FF87; font-weight: 700; }\n  .recovery { background: #0a2a1a; border: 1px solid #00FF87; border-radius: 12px; padding: 24px; margin-bottom: 20px; }\n  .recovery-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; text-align: center; }\n  .footer { text-align: center; color: rgba(255,255,255,0.4); font-size: 12px; margin-top: 40px; }\n</style>\n</head>\n<body>\n<div class=\"header\">\n  <div class=\"logo\">Revryze</div>\n  <div class=\"title\">Presale Survival Test Results</div>\n  <div class=\"subtitle\">Prepared for ${d.name || 'N/A'} &mdash; ${d.brandName || 'N/A'}</div>\n</div>\n<div class=\"section\">\n  <div class=\"section-title\">Survival Score</div>\n  <div class=\"metric-grid\">\n    <div class=\"metric\">\n      <div class=\"metric-label\">Projected Members</div>\n      <div class=\"metric-value ${scoreClass}\">${d.projectedMembers || '0'}</div>\n    </div>\n    <div class=\"metric\">\n      <div class=\"metric-label\">Status</div>\n      <div class=\"metric-value ${scoreClass}\">${d.survivalScore || 'N/A'}</div>\n    </div>\n    <div class=\"metric\">\n      <div class=\"metric-label\">Opening MRR</div>\n      <div class=\"metric-value ${scoreClass}\">$${d.openingMRR || '0'}</div>\n    </div>\n    <div class=\"metric\">\n      <div class=\"metric-label\">OPEX Coverage</div>\n      <div class=\"metric-value ${scoreClass}\">${d.opexCoverage || '0'}%</div>\n    </div>\n  </div>\n</div>\n<div class=\"section\">\n  <div class=\"section-title\">Your Plan vs With Revryze</div>\n  <table class=\"comparison-table\">\n    <tr>\n      <th></th>\n      <th>Your Plan</th>\n      <th class=\"with-revryze\">With Revryze</th>\n    </tr>\n    <tr>\n      <td>Founding Members</td>\n      <td>${d.projectedMembers || '0'}</td>\n      <td class=\"with-revryze\">200+</td>\n    </tr>\n    <tr>\n      <td>Opening MRR</td>\n      <td>$${d.openingMRR || '0'}</td>\n      <td class=\"with-revryze\">$30,000</td>\n    </tr>\n    <tr>\n      <td>MRR vs $30K Threshold</td>\n      <td>${d.mrrVsThreshold || 'N/A'}</td>\n      <td class=\"with-revryze\">Above</td>\n    </tr>\n    <tr>\n      <td>Cash Position at Open</td>\n      <td>${d.cashPosition || 'N/A'}</td>\n      <td class=\"with-revryze\">Breakeven+</td>\n    </tr>\n  </table>\n</div>\n<div class=\"recovery\">\n  <div class=\"section-title\">Revenue Recovery Potential</div>\n  <div class=\"recovery-grid\">\n    <div>\n      <div class=\"metric-value healthy\">+${d.recoveryMembers || '0'}</div>\n      <div class=\"metric-label\">Additional Members</div>\n    </div>\n    <div>\n      <div class=\"metric-value healthy\">+$${d.recoveryMRR || '0'}</div>\n      <div class=\"metric-label\">Additional MRR</div>\n    </div>\n    <div>\n      <div class=\"metric-value healthy\">$${d.recoveryLTV || '0'}</div>\n      <div class=\"metric-label\">Recovered LTV</div>\n    </div>\n  </div>\n</div>\n<div class=\"footer\">\n  Revryze &middot; presale execution for franchise operators &middot; revryze.com\n</div>\n</body>\n</html>`;\n\nreturn [{\n  json: {\n    auditHtml,\n    email: d.email,\n    name: d.name,\n    brandName: d.brandName,\n    phone: d.phone,\n    linkedin: d.linkedin,\n    role: d.role,\n    unitCount: d.unitCount,\n    survivalScore: d.survivalScore,\n    projectedMembers: d.projectedMembers,\n    openingMRR: d.openingMRR,\n    monthlyOpex: d.monthlyOpex,\n    opexCoverage: d.opexCoverage,\n    mrrVsThreshold: d.mrrVsThreshold,\n    cashPosition: d.cashPosition,\n    recoveryMembers: d.recoveryMembers,\n    recoveryMRR: d.recoveryMRR,\n    recoveryLTV: d.recoveryLTV\n  }\n}];"
+        "jsCode": "const webhookData = $('Webhook').first().json;\nconst d = webhookData.body ? webhookData.body : webhookData;\n\n\n// Determine scoreClass from survivalScore\nconst scoreRaw = String(d.survivalScore || '').trim();\nlet scoreClass = 'critical';\nconst scoreLower = scoreRaw.toLowerCase();\nif (scoreLower === 'healthy') scoreClass = 'healthy';\nelse if (scoreLower === 'marginal') scoreClass = 'marginal';\nelse if (scoreLower === 'danger') scoreClass = 'danger';\nelse if (scoreLower === 'critical') scoreClass = 'critical';\nelse {\n  const num = parseFloat(scoreRaw);\n  if (!isNaN(num)) {\n    if (num >= 75) scoreClass = 'healthy';\n    else if (num >= 50) scoreClass = 'marginal';\n    else if (num >= 25) scoreClass = 'danger';\n  }\n}\n\nconst auditHtml = `<!DOCTYPE html>\n<html>\n<head>\n<meta charset=\"utf-8\">\n<style>\n  body { font-family: Inter, Arial, Helvetica, sans-serif; background: #06060b; color: #ffffff; padding: 40px; margin: 0; }\n  .header { text-align: center; margin-bottom: 40px; }\n  .logo { color: #00FF87; font-size: 32px; font-weight: 900; letter-spacing: -1px; }\n  .title { color: #ffffff; font-size: 22px; margin-top: 8px; }\n  .subtitle { color: rgba(255,255,255,0.6); font-size: 14px; }\n  .section { background: #181828; border-radius: 12px; padding: 24px; margin-bottom: 20px; }\n  .section-title { color: #00FF87; font-size: 12px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; margin-bottom: 16px; }\n  .metric-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }\n  .metric { background: #06060b; border-radius: 8px; padding: 16px; }\n  .metric-label { color: rgba(255,255,255,0.5); font-size: 11px; text-transform: uppercase; letter-spacing: 1px; }\n  .metric-value { font-size: 28px; font-weight: 700; font-family: monospace; margin-top: 4px; }\n  .healthy { color: #00FF87; }\n  .marginal { color: #ffa726; }\n  .danger { color: #ff3d71; }\n  .critical { color: #ff1744; }\n  .comparison-table { width: 100%; border-collapse: collapse; }\n  .comparison-table th { color: rgba(255,255,255,0.5); font-size: 11px; text-transform: uppercase; padding: 8px 12px; text-align: left; }\n  .comparison-table td { padding: 12px; border-top: 1px solid #2a2a3a; font-size: 14px; }\n  .comparison-table .with-revryze { color: #00FF87; font-weight: 700; }\n  .recovery { background: #0a2a1a; border: 1px solid #00FF87; border-radius: 12px; padding: 24px; margin-bottom: 20px; }\n  .recovery-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; text-align: center; }\n  .footer { text-align: center; color: rgba(255,255,255,0.4); font-size: 12px; margin-top: 40px; }\n</style>\n</head>\n<body>\n<div class=\"header\">\n  <div class=\"logo\">Revryze</div>\n  <div class=\"title\">Presale Survival Test Results</div>\n  <div class=\"subtitle\">Prepared for ${d.name || 'N/A'} &mdash; ${d.brandName || 'N/A'}</div>\n</div>\n<div class=\"section\">\n  <div class=\"section-title\">Survival Score</div>\n  <div class=\"metric-grid\">\n    <div class=\"metric\">\n      <div class=\"metric-label\">Projected Members</div>\n      <div class=\"metric-value ${scoreClass}\">${d.projectedMembers || '0'}</div>\n    </div>\n    <div class=\"metric\">\n      <div class=\"metric-label\">Status</div>\n      <div class=\"metric-value ${scoreClass}\">${d.survivalScore || 'N/A'}</div>\n    </div>\n    <div class=\"metric\">\n      <div class=\"metric-label\">Opening MRR</div>\n      <div class=\"metric-value ${scoreClass}\">$${d.openingMRR || '0'}</div>\n    </div>\n    <div class=\"metric\">\n      <div class=\"metric-label\">OPEX Coverage</div>\n      <div class=\"metric-value ${scoreClass}\">${d.opexCoverage || '0'}%</div>\n    </div>\n  </div>\n</div>\n<div class=\"section\">\n  <div class=\"section-title\">Your Plan vs With Revryze</div>\n  <table class=\"comparison-table\">\n    <tr>\n      <th></th>\n      <th>Your Plan</th>\n      <th class=\"with-revryze\">With Revryze</th>\n    </tr>\n    <tr>\n      <td>Founding Members</td>\n      <td>${d.projectedMembers || '0'}</td>\n      <td class=\"with-revryze\">200+</td>\n    </tr>\n    <tr>\n      <td>Opening MRR</td>\n      <td>$${d.openingMRR || '0'}</td>\n      <td class=\"with-revryze\">$30,000</td>\n    </tr>\n    <tr>\n      <td>MRR vs $30K Threshold</td>\n      <td>${d.mrrVsThreshold || 'N/A'}</td>\n      <td class=\"with-revryze\">Above</td>\n    </tr>\n    <tr>\n      <td>Cash Position at Open</td>\n      <td>${d.cashPosition || 'N/A'}</td>\n      <td class=\"with-revryze\">Breakeven+</td>\n    </tr>\n  </table>\n</div>\n<div class=\"recovery\">\n  <div class=\"section-title\">Revenue Recovery Potential</div>\n  <div class=\"recovery-grid\">\n    <div>\n      <div class=\"metric-value healthy\">+${d.recoveryMembers || '0'}</div>\n      <div class=\"metric-label\">Additional Members</div>\n    </div>\n    <div>\n      <div class=\"metric-value healthy\">+$${d.recoveryMRR || '0'}</div>\n      <div class=\"metric-label\">Additional MRR</div>\n    </div>\n    <div>\n      <div class=\"metric-value healthy\">$${d.recoveryLTV || '0'}</div>\n      <div class=\"metric-label\">Recovered LTV</div>\n    </div>\n  </div>\n</div>\n<div class=\"footer\">\n  Revryze &middot; presale execution for franchise operators &middot; revryze.com\n</div>\n</body>\n</html>`;\n\nreturn [{\n  json: {\n    auditHtml,\n    email: d.email,\n    name: d.name,\n    brandName: d.brandName,\n    phone: d.phone,\n    linkedin: d.linkedin,\n    role: d.role,\n    unitCount: d.unitCount,\n    survivalScore: d.survivalScore,\n    projectedMembers: d.projectedMembers,\n    openingMRR: d.openingMRR,\n    monthlyOpex: d.monthlyOpex,\n    opexCoverage: d.opexCoverage,\n    mrrVsThreshold: d.mrrVsThreshold,\n    cashPosition: d.cashPosition,\n    recoveryMembers: d.recoveryMembers,\n    recoveryMRR: d.recoveryMRR,\n    recoveryLTV: d.recoveryLTV\n  }\n}];"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [500, 300],
-      "id": "b0000001-0003-4000-8000-000000000003",
+      "position": [
+        1152,
+        96
+      ],
+      "id": "0b240651-3a5e-4a31-947c-cc0c4c875b89",
       "name": "Build Audit HTML"
     },
     {
@@ -31,7 +37,7 @@
         "url": "https://api.html2pdf.app/v1/generate",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ html: $json.auditHtml, apiKey: 'REPLACE_WITH_YOUR_HTML2PDF_API_KEY', format: 'A4', marginTop: '0', marginBottom: '0' }) }}",
+        "jsonBody": "={{ JSON.stringify({ html: $json.auditHtml, apiKey: 'DXuKWfYyRElo0QK9FAhOJmLFnWlRj5eNHXpXDGx8Z0jC8E2X6NqD0WRYOv2ODAyX', format: 'A4', marginTop: '0', marginBottom: '0' }) }}",
         "options": {
           "response": {
             "response": {
@@ -43,107 +49,74 @@
       },
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [760, 300],
-      "id": "b0000001-0004-4000-8000-000000000004",
-      "name": "Generate Audit PDF"
+      "position": [
+        1472,
+        0
+      ],
+      "id": "4bf14faa-5cf1-4fde-b467-7117634b2fd8",
+      "name": "Generate Audit PDF1"
     },
     {
       "parameters": {
         "sendTo": "={{ $('Build Audit HTML').item.json.email }}",
         "subject": "=Your Presale Survival Test Results — {{ $('Build Audit HTML').item.json.brandName }}",
-        "emailType": "html",
         "message": "=Hi {{ $('Build Audit HTML').item.json.name }},<br><br>Attached are your audit results from the Revryze Presale Survival Test.<br><br>Your survival score: <strong>{{ $('Build Audit HTML').item.json.survivalScore }}</strong><br>Projected members: <strong>{{ $('Build Audit HTML').item.json.projectedMembers }}</strong><br>Opening MRR: <strong>${{ $('Build Audit HTML').item.json.openingMRR }}</strong><br><br>We'll walk through these numbers on your consultation call.<br><br>&mdash; The Revryze Team",
         "options": {
+          "appendAttribution": false,
           "attachmentsUi": {
             "attachmentsBinary": [
               {
                 "property": "auditPDF"
               }
             ]
-          },
-          "appendAttribution": false
+          }
         }
       },
       "type": "n8n-nodes-base.gmail",
       "typeVersion": 2.1,
-      "position": [1020, 160],
-      "id": "b0000001-0007-4000-8000-000000000007",
-      "name": "Email to Lead",
+      "position": [
+        1792,
+        -128
+      ],
+      "id": "cb595747-b6f2-4649-bf46-a07b89308b8b",
+      "name": "Email to Lead1",
+      "webhookId": "ac8f6153-a378-450e-ab6f-13fd34147b31",
       "credentials": {
         "gmailOAuth2": {
-          "id": "REPLACE_WITH_YOUR_GMAIL_CREDENTIAL_ID",
-          "name": "Gmail OAuth2"
+          "id": "NgC6xvAwRLhJcm2p",
+          "name": "Gmail account"
         }
       }
     },
     {
       "parameters": {
-        "method": "POST",
-        "url": "https://api.anthropic.com/v1/messages",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "x-api-key",
-              "value": "REPLACE_WITH_YOUR_ANTHROPIC_API_KEY"
-            },
-            {
-              "name": "anthropic-version",
-              "value": "2023-06-01"
-            },
-            {
-              "name": "content-type",
-              "value": "application/json"
-            }
-          ]
-        },
-        "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ model: 'claude-sonnet-4-5-20250514', max_tokens: 1024, messages: [{ role: 'user', content: 'You are a sales research assistant. Based on the following information about a franchise operator, do background research on the prospect and the brand they have a franchise in. Write a concise 1-page sales brief to arm a sales team before a consultation call.\\n\\nInclude:\\n- Brand overview (what the franchise is, how it operates, target market)\\n- Business model and likely unit economics\\n- What this prospect likely cares about based on their role and situation\\n- How Revryze\\'s presale membership system is relevant to them\\n- Key talking points for the sales call\\n\\nKeep it sharp and sales-focused, not generic.\\n\\nName: ' + $('Build Audit HTML').item.json.name + '\\nBrand: ' + $('Build Audit HTML').item.json.brandName + '\\nRole: ' + $('Build Audit HTML').item.json.role + '\\nLinkedIn: ' + $('Build Audit HTML').item.json.linkedin + '\\nUnits planning to open: ' + $('Build Audit HTML').item.json.unitCount }] }) }}",
-        "options": {}
-      },
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [1020, 500],
-      "id": "b0000001-0002-4000-8000-000000000002",
-      "name": "Claude Research"
-    },
-    {
-      "parameters": {
-        "jsCode": "const aiResponse = $input.first().json;\n\n// Support both raw Anthropic API and n8n AI node formats\nlet brief = '';\nif (aiResponse.content && aiResponse.content[0] && aiResponse.content[0].text) {\n  brief = aiResponse.content[0].text;\n} else if (aiResponse.output) {\n  brief = aiResponse.output;\n} else if (aiResponse.text) {\n  brief = aiResponse.text;\n} else {\n  brief = 'Sales brief unavailable.';\n}\n\nconst auditData = $('Build Audit HTML').first().json;\nconst pdfBinary = $('Generate Audit PDF').first().binary.auditPDF;\n\nreturn [{\n  json: {\n    brief,\n    name: auditData.name,\n    email: auditData.email,\n    brandName: auditData.brandName,\n    role: auditData.role,\n    unitCount: auditData.unitCount,\n    phone: auditData.phone,\n    linkedin: auditData.linkedin,\n    survivalScore: auditData.survivalScore\n  },\n  binary: {\n    auditPDF: pdfBinary\n  }\n}];"
-      },
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [1280, 500],
-      "id": "b0000001-0005-4000-8000-000000000005",
-      "name": "Prepare Sales Email"
-    },
-    {
-      "parameters": {
         "sendTo": "sales@revryze.com",
-        "subject": "=New Lead: {{ $json.name }} — {{ $json.brandName }} | {{ $json.survivalScore }}",
-        "emailType": "html",
-        "message": "=New submission from the Presale Survival Test.<br><br><strong>Name:</strong> {{ $json.name }}<br><strong>Email:</strong> {{ $json.email }}<br><strong>Phone:</strong> {{ $json.phone }}<br><strong>LinkedIn:</strong> {{ $json.linkedin }}<br><strong>Brand:</strong> {{ $json.brandName }}<br><strong>Role:</strong> {{ $json.role }}<br><strong>Units:</strong> {{ $json.unitCount }}<br><strong>Survival Score:</strong> {{ $json.survivalScore }}<br><br><hr><br><strong>Sales Brief:</strong><br><pre style=\"white-space: pre-wrap; font-family: inherit;\">{{ $json.brief }}</pre>",
+        "subject": "=New Lead: {{ $('Build Audit HTML').item.json.name }} — {{ $('Build Audit HTML').item.json.brandName }} | {{ $('Build Audit HTML').item.json.survivalScore }}",
+        "message": "=New submission from the Presale Survival Test.<br><br><strong>Name:</strong> {{ $('Build Audit HTML').item.json.name }}<br><strong>Email:</strong> {{ $('Build Audit HTML').item.json.email }}<br><strong>Phone:</strong> {{ $('Build Audit HTML').item.json.phone }}<br><strong>LinkedIn:</strong> {{ $('Build Audit HTML').item.json.linkedin }}<br><strong>Brand:</strong> {{ $('Build Audit HTML').item.json.brandName }}<br><strong>Role:</strong> {{ $('Build Audit HTML').item.json.role }}<br><strong>Units:</strong> {{ $('Build Audit HTML').item.json.unitCount }}<br><strong>Survival Score:</strong> {{ $('Build Audit HTML').item.json.survivalScore }}<br><strong>Projected Members:</strong> {{ $('Build Audit HTML').item.json.projectedMembers }}<br><strong>Opening MRR:</strong> ${{ $('Build Audit HTML').item.json.openingMRR }}<br><br><hr><br><strong>Sales Brief:</strong><br><pre style=\"white-space: pre-wrap; font-family: inherit;\">{{ $json.brief }}</pre>",
         "options": {
+          "appendAttribution": false,
           "attachmentsUi": {
             "attachmentsBinary": [
               {
                 "property": "auditPDF"
               }
             ]
-          },
-          "appendAttribution": false
+          }
         }
       },
       "type": "n8n-nodes-base.gmail",
       "typeVersion": 2.1,
-      "position": [1540, 500],
-      "id": "b0000001-0008-4000-8000-000000000008",
-      "name": "Email to Sales Team",
+      "position": [
+        2384,
+        96
+      ],
+      "id": "4f322f4c-001e-4592-9623-3b786ee0a16c",
+      "name": "Email to Sales Team1",
+      "webhookId": "a1860d68-e257-4ca5-90e1-91b9ec06ae0c",
       "credentials": {
         "gmailOAuth2": {
-          "id": "REPLACE_WITH_YOUR_GMAIL_CREDENTIAL_ID",
-          "name": "Gmail OAuth2"
+          "id": "NgC6xvAwRLhJcm2p",
+          "name": "Gmail account"
         }
       }
     },
@@ -155,11 +128,86 @@
       },
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
-      "position": [1800, 300],
-      "id": "b0000001-0009-4000-8000-000000000009",
-      "name": "Respond to Webhook"
+      "position": [
+        2592,
+        96
+      ],
+      "id": "75b0d906-88d3-4efb-b10e-385290864f03",
+      "name": "Respond to Webhook1"
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "claude-sonnet-4-6",
+          "mode": "list",
+          "cachedResultName": "claude-sonnet-4-6"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "=You are a sales research assistant. Based on the following information about a franchise operator, do background research on the prospect and the brand they have a franchise in. Write a concise 1-page sales brief to arm a sales team before a consultation call.\n\nInclude:\n- Brand overview (what the franchise is, how it operates, target market)\n- Business model and likely unit economics\n- What this prospect likely cares about based on their role and situation\n- How Revryze's presale membership system is relevant to them\n- Key talking points for the sales call\n\nKeep it sharp and sales-focused, not generic.\n\nName: {{ $('Build Audit HTML').item.json.name }}\nBrand: {{ $('Build Audit HTML').item.json.brandName }}\nRole: {{ $('Build Audit HTML').item.json.role }}\nLinkedIn: {{ $('Build Audit HTML').item.json.linkedin }}\nUnits planning to open: {{ $('Build Audit HTML').item.json.unitCount }}\nMonthly OPEX: ${{ $('Build Audit HTML').item.json.monthlyOpex }}\nProjected members: {{ $('Build Audit HTML').item.json.projectedMembers }}\nOpening MRR: ${{ $('Build Audit HTML').item.json.openingMRR }}\nSurvival score: {{ $('Build Audit HTML').item.json.survivalScore }}\n"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.anthropic",
+      "typeVersion": 1,
+      "position": [
+        1712,
+        256
+      ],
+      "id": "f3f97f9d-1070-4bea-8150-143c953610d5",
+      "name": "Message a model",
+      "credentials": {
+        "anthropicApi": {
+          "id": "26rczUeVyA6x0xt1",
+          "name": "Anthropic account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const aiResponse = $input.first().json;\n\n// Get AI brief - supports both n8n AI node and raw API formats\nlet brief = '';\nif (aiResponse.content && aiResponse.content[0] && aiResponse.content[0].text) {\n  brief = aiResponse.content[0].text;\n} else if (aiResponse.output) {\n  brief = aiResponse.output;\n} else if (aiResponse.text) {\n  brief = aiResponse.text;\n} else {\n  brief = 'Sales brief unavailable.';\n}\n\nconst auditData = $('Build Audit HTML').first().json;\nconst pdfBinary = $('Generate Audit PDF1').first().binary.auditPDF;\n\nreturn [{\n  json: {\n    brief,\n    name: auditData.name,\n    email: auditData.email,\n    brandName: auditData.brandName,\n    role: auditData.role,\n    unitCount: auditData.unitCount,\n    phone: auditData.phone,\n    linkedin: auditData.linkedin,\n    survivalScore: auditData.survivalScore\n  },\n  binary: {\n    auditPDF: pdfBinary\n  }\n}];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2016,
+        256
+      ],
+      "id": "4bd6f1da-9ecc-4b8e-98d6-b5745b596d05",
+      "name": "Code in JavaScript"
     }
   ],
+  "pinData": {
+    "Webhook": [
+      {
+        "json": {
+          "body": {
+            "name": "John Smith",
+            "email": "john@example.com",
+            "phone": "555-123-4567",
+            "brandName": "F45 Training",
+            "role": "Franchisee",
+            "linkedin": "linkedin.com/in/johnsmith",
+            "unitCount": 2,
+            "monthlyOpex": 25000,
+            "projectedMembers": 80,
+            "openingMRR": 12000,
+            "survivalScore": "Danger",
+            "opexCoverage": 48,
+            "mrrVsThreshold": "Below",
+            "cashPosition": "Negative",
+            "recoveryMembers": 120,
+            "recoveryMRR": 18000,
+            "recoveryLTV": 216000
+          }
+        }
+      }
+    ]
+  },
   "connections": {
     "Webhook": {
       "main": [
@@ -176,59 +224,67 @@
       "main": [
         [
           {
-            "node": "Generate Audit PDF",
+            "node": "Generate Audit PDF1",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Generate Audit PDF": {
+    "Generate Audit PDF1": {
       "main": [
         [
           {
-            "node": "Email to Lead",
+            "node": "Email to Lead1",
             "type": "main",
             "index": 0
           },
           {
-            "node": "Claude Research",
+            "node": "Message a model",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Email to Lead": {
-      "main": [[]]
-    },
-    "Claude Research": {
+    "Email to Lead1": {
       "main": [
         [
           {
-            "node": "Prepare Sales Email",
+            "node": "Respond to Webhook1",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Prepare Sales Email": {
+    "Message a model": {
       "main": [
         [
           {
-            "node": "Email to Sales Team",
+            "node": "Code in JavaScript",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Email to Sales Team": {
+    "Code in JavaScript": {
       "main": [
         [
           {
-            "node": "Respond to Webhook",
+            "node": "Email to Sales Team1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Email to Sales Team1": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook1",
             "type": "main",
             "index": 0
           }
@@ -236,11 +292,17 @@
       ]
     }
   },
-  "pinData": {},
+  "active": true,
   "settings": {
-    "executionOrder": "v1"
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
   },
-  "staticData": null,
-  "tags": [],
-  "triggerCount": 1
+  "versionId": "98b2f486-de82-49cf-b42f-355d71a70040",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "0dd792e002b291da0dbecf5d75bc1f54e16c0266d8f8277263d78abbb783f658"
+  },
+  "id": "MstQtlwT3k5xJyPS",
+  "tags": []
 }
