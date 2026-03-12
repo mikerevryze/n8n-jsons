@@ -200,15 +200,7 @@
       ]
     },
     "Email to Lead": {
-      "main": [
-        [
-          {
-            "node": "Respond to Webhook",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
+      "main": [[]]
     },
     "Claude Research": {
       "main": [
