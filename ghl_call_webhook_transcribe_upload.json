@@ -1,0 +1,778 @@
+{
+  "name": "GHL_Call_Webhook_Transcribe_Upload",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "ghl-call-completed",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [220, 300],
+      "id": "a1b2c3d4-0001-4000-8000-000000000001",
+      "name": "GHL Call Webhook",
+      "webhookId": "ghl-call-completed"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extract fields from the GHL webhook payload\nconst body = $input.first().json.body || $input.first().json;\n\nconst contactId = body.contact_id || body.contactId || '';\nconst userId = body.user_id || body.userId || '';\nconst locationId = body.location_id || body.locationId || '';\nconst recordingUrl = body.recording_url || body.recordingUrl || '';\nconst callStatus = body.status || body.call_status || '';\nconst callDirection = body.direction || '';\nconst dateAdded = body.date_added || body.dateAdded || new Date().toISOString();\n\nif (!contactId) {\n  throw new Error('Missing contact_id in webhook payload');\n}\nif (!userId) {\n  throw new Error('Missing user_id in webhook payload');\n}\n\nreturn [{\n  json: {\n    contactId,\n    userId,\n    locationId,\n    recordingUrl,\n    callStatus,\n    callDirection,\n    dateAdded\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [440, 300],
+      "id": "a1b2c3d4-0002-4000-8000-000000000002",
+      "name": "Extract Webhook Data"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "condition-recording-check",
+              "leftValue": "={{ $json.recordingUrl }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [660, 300],
+      "id": "a1b2c3d4-0003-4000-8000-000000000003",
+      "name": "Has Recording URL?"
+    },
+    {
+      "parameters": {
+        "jsCode": "console.log('No recording URL found in webhook payload. Skipping transcription and upload.');\nreturn [{\n  json: {\n    status: 'skipped',\n    reason: 'No recording URL in webhook payload',\n    contactId: $('Extract Webhook Data').first().json.contactId,\n    userId: $('Extract Webhook Data').first().json.userId,\n    timestamp: new Date().toISOString()\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [880, 500],
+      "id": "a1b2c3d4-0004-4000-8000-000000000004",
+      "name": "Log No Recording"
+    },
+    {
+      "parameters": {
+        "url": "=https://services.leadconnectorhq.com/contacts/{{ $('Extract Webhook Data').first().json.contactId }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Version",
+              "value": "2021-07-28"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [880, 100],
+      "id": "a1b2c3d4-0005-4000-8000-000000000005",
+      "name": "Get Contact",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "ghl_api_credential",
+          "name": "GHL API Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "=https://services.leadconnectorhq.com/users/{{ $('Extract Webhook Data').first().json.userId }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Version",
+              "value": "2021-07-28"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [880, 300],
+      "id": "a1b2c3d4-0006-4000-8000-000000000006",
+      "name": "Get User",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "ghl_api_credential",
+          "name": "GHL API Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "=https://services.leadconnectorhq.com/locations/{{ $('Extract Webhook Data').first().json.locationId }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Version",
+              "value": "2021-07-28"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [880, -100],
+      "id": "a1b2c3d4-0016-4000-8000-000000000016",
+      "name": "Get Location",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "ghl_api_credential",
+          "name": "GHL API Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineAll",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [1100, 100],
+      "id": "a1b2c3d4-0017-4000-8000-000000000017",
+      "name": "Merge Contact & User"
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineAll",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [1300, 0],
+      "id": "a1b2c3d4-0018-4000-8000-000000000018",
+      "name": "Merge All Data"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Build the filename and gather all needed data\nconst webhookData = $('Extract Webhook Data').first().json;\nconst contactData = $input.first().json;\n\n// Extract contact (lead) info\nconst contact = contactData.contact || contactData;\nconst leadFirstName = (contact.firstName || contact.first_name || 'unknown').toLowerCase().trim();\nconst leadLastName = (contact.lastName || contact.last_name || 'unknown').toLowerCase().trim();\n\n// Extract user (rep) info — may be nested differently after merge\nconst user = contactData.user || contactData;\nconst repFirstName = (user.firstName || user.first_name || contactData.name?.split(' ')[0] || 'unknown').toLowerCase().trim();\nconst repLastName = (user.lastName || user.last_name || contactData.name?.split(' ').slice(1).join(' ') || 'unknown').toLowerCase().trim();\n\n// Extract location/subaccount name\nconst location = contactData.location || contactData;\nconst subaccountName = location.name || contactData.name || 'Unknown Location';\n\n// Build date string\nconst callDate = new Date(webhookData.dateAdded);\nconst dateStr = callDate.toISOString().split('T')[0];\n\n// Build filename: repfirstname-replastname_leadfirstname-leadlastname_YYYY-MM-DD\nconst filename = `${repFirstName}-${repLastName}_${leadFirstName}-${leadLastName}_${dateStr}`;\n\n// Display names for transcript\nconst repFullName = `${repFirstName.charAt(0).toUpperCase() + repFirstName.slice(1)} ${repLastName.charAt(0).toUpperCase() + repLastName.slice(1)}`;\nconst leadFullName = `${leadFirstName.charAt(0).toUpperCase() + leadFirstName.slice(1)} ${leadLastName.charAt(0).toUpperCase() + leadLastName.slice(1)}`;\n\nreturn [{\n  json: {\n    filename,\n    repFullName,\n    leadFullName,\n    subaccountName,\n    recordingUrl: webhookData.recordingUrl,\n    contactId: webhookData.contactId,\n    userId: webhookData.userId,\n    locationId: webhookData.locationId,\n    dateStr\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1520, 0],
+      "id": "a1b2c3d4-0007-4000-8000-000000000007",
+      "name": "Build Filename & Names"
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.recordingUrl }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file",
+              "outputPropertyName": "recordingFile"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1740, 0],
+      "id": "a1b2c3d4-0008-4000-8000-000000000008",
+      "name": "Download Recording MP3"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.elevenlabs.io/v1/speech-to-text",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendBody": true,
+        "contentType": "multipart-form-data",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "file",
+              "parameterType": "formBinaryData",
+              "inputDataFieldName": "recordingFile"
+            },
+            {
+              "name": "model_id",
+              "value": "scribe_v1"
+            },
+            {
+              "name": "diarize",
+              "value": "true"
+            },
+            {
+              "name": "language_code",
+              "value": "eng"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 300000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1960, 0],
+      "id": "a1b2c3d4-0009-4000-8000-000000000009",
+      "name": "Transcribe with ElevenLabs",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "elevenlabs_api_credential",
+          "name": "ElevenLabs API Key"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "condition-transcription-check",
+              "leftValue": "={{ $json.words }}",
+              "rightValue": "",
+              "operator": {
+                "type": "array",
+                "operation": "notEmpty"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [2180, 0],
+      "id": "a1b2c3d4-0010-4000-8000-000000000010",
+      "name": "Transcription OK?"
+    },
+    {
+      "parameters": {
+        "jsCode": "console.log('Transcription failed or returned empty. Skipping transcript upload.');\nconst fileData = $('Build Filename & Names').first().json;\nreturn [{\n  json: {\n    status: 'error',\n    reason: 'Transcription failed or returned no words',\n    filename: fileData.filename,\n    timestamp: new Date().toISOString()\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2400, 200],
+      "id": "a1b2c3d4-0011-4000-8000-000000000011",
+      "name": "Log Transcription Error"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Format the ElevenLabs Scribe transcript into clean timestamped dialogue\nconst transcriptionData = $('Transcribe with ElevenLabs').first().json;\nconst fileData = $('Build Filename & Names').first().json;\nconst repFullName = fileData.repFullName;\nconst leadFullName = fileData.leadFullName;\n\nconst words = transcriptionData.words || [];\n\nif (words.length === 0) {\n  return [{ json: { transcript: '(No speech detected)', filename: fileData.filename } }];\n}\n\n// Group words into utterances by speaker changes\nconst utterances = [];\nlet currentSpeaker = null;\nlet currentWords = [];\nlet currentStart = 0;\n\nfor (const word of words) {\n  const speaker = word.speaker_id !== undefined ? word.speaker_id : (word.speaker ?? null);\n  \n  if (speaker !== currentSpeaker && currentWords.length > 0) {\n    utterances.push({\n      speaker: currentSpeaker,\n      text: currentWords.join(' '),\n      start: currentStart\n    });\n    currentWords = [];\n  }\n  \n  if (currentWords.length === 0) {\n    currentStart = word.start_time || word.start || 0;\n    currentSpeaker = speaker;\n  }\n  \n  currentWords.push(word.text || word.word || '');\n}\n\n// Push last utterance\nif (currentWords.length > 0) {\n  utterances.push({\n    speaker: currentSpeaker,\n    text: currentWords.join(' '),\n    start: currentStart\n  });\n}\n\n// Format timestamp as [HH:MM:SS]\nfunction formatTime(seconds) {\n  const h = Math.floor(seconds / 3600).toString().padStart(2, '0');\n  const m = Math.floor((seconds % 3600) / 60).toString().padStart(2, '0');\n  const s = Math.floor(seconds % 60).toString().padStart(2, '0');\n  return `[${h}:${m}:${s}]`;\n}\n\n// Build formatted transcript\n// Speaker 0 = Rep, Speaker 1 = Lead\nconst lines = utterances.map(u => {\n  const speakerNum = parseInt(u.speaker, 10);\n  let label;\n  if (speakerNum === 0) {\n    label = `Rep (${repFullName})`;\n  } else if (speakerNum === 1) {\n    label = `Lead (${leadFullName})`;\n  } else {\n    label = `Speaker ${u.speaker}`;\n  }\n  return `${formatTime(u.start)} ${label}: ${u.text.trim()}`;\n});\n\nconst transcript = lines.join('\\n');\n\nreturn [{\n  json: {\n    transcript,\n    filename: fileData.filename,\n    subaccountName: fileData.subaccountName\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2400, -100],
+      "id": "a1b2c3d4-0012-4000-8000-000000000012",
+      "name": "Format Transcript"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Search for a folder with the subaccount name in Google Drive\n// This node outputs the subaccount name so the next nodes can use it\nconst fileData = $('Build Filename & Names').first().json;\nconst transcript = $('Format Transcript').first().json.transcript;\n\nreturn [{\n  json: {\n    filename: fileData.filename,\n    subaccountName: fileData.subaccountName,\n    transcript\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2620, -100],
+      "id": "a1b2c3d4-0019-4000-8000-000000000019",
+      "name": "Prepare Upload Data"
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://www.googleapis.com/drive/v3/files",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleDriveOAuth2Api",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "q",
+              "value": "=mimeType='application/vnd.google-apps.folder' and name='{{ $json.subaccountName }}' and trashed=false"
+            },
+            {
+              "name": "fields",
+              "value": "files(id,name)"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2840, -100],
+      "id": "a1b2c3d4-0013-4000-8000-000000000013",
+      "name": "Search Drive Folder",
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "google_drive_credential",
+          "name": "Google Drive OAuth2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Check if the folder was found; if not, create it\nconst searchResult = $input.first().json;\nconst files = searchResult.files || [];\nconst uploadData = $('Prepare Upload Data').first().json;\n\nif (files.length > 0) {\n  // Folder exists\n  return [{\n    json: {\n      folderId: files[0].id,\n      folderName: files[0].name,\n      filename: uploadData.filename,\n      transcript: uploadData.transcript,\n      subaccountName: uploadData.subaccountName,\n      needsCreation: false\n    }\n  }];\n} else {\n  // Folder does not exist, flag for creation\n  return [{\n    json: {\n      folderId: null,\n      folderName: uploadData.subaccountName,\n      filename: uploadData.filename,\n      transcript: uploadData.transcript,\n      subaccountName: uploadData.subaccountName,\n      needsCreation: true\n    }\n  }];\n}"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [3060, -100],
+      "id": "a1b2c3d4-0020-4000-8000-000000000020",
+      "name": "Check Folder Exists"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "condition-folder-exists",
+              "leftValue": "={{ $json.needsCreation }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [3280, -100],
+      "id": "a1b2c3d4-0021-4000-8000-000000000021",
+      "name": "Folder Needs Creation?"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://www.googleapis.com/drive/v3/files",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleDriveOAuth2Api",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ name: $json.subaccountName, mimeType: 'application/vnd.google-apps.folder' }) }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [3500, -200],
+      "id": "a1b2c3d4-0014-4000-8000-000000000014",
+      "name": "Create Drive Folder",
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "google_drive_credential",
+          "name": "Google Drive OAuth2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// After creating the folder, set the folderId from the response\nconst createResult = $input.first().json;\nconst prevData = $('Check Folder Exists').first().json;\n\nreturn [{\n  json: {\n    folderId: createResult.id,\n    folderName: prevData.subaccountName,\n    filename: prevData.filename,\n    transcript: prevData.transcript,\n    subaccountName: prevData.subaccountName\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [3720, -200],
+      "id": "a1b2c3d4-0022-4000-8000-000000000022",
+      "name": "Set New Folder ID"
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineAll",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [3940, -100],
+      "id": "a1b2c3d4-0023-4000-8000-000000000023",
+      "name": "Merge Folder Result"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Normalize the folder data from either path (existing or newly created)\nconst data = $input.first().json;\nconst folderId = data.folderId;\nconst filename = data.filename;\nconst transcript = data.transcript;\nconst subaccountName = data.subaccountName;\n\nreturn [{\n  json: {\n    folderId,\n    filename,\n    transcript,\n    subaccountName\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [4160, -100],
+      "id": "a1b2c3d4-0024-4000-8000-000000000024",
+      "name": "Normalize Folder Data"
+    },
+    {
+      "parameters": {
+        "name": "={{ $json.filename }}.mp3",
+        "folderId": {
+          "__rl": true,
+          "value": "={{ $json.folderId }}",
+          "mode": "id"
+        },
+        "inputDataFieldName": "recordingFile",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [4380, -200],
+      "id": "a1b2c3d4-0015-4000-8000-000000000015",
+      "name": "Upload MP3 to Drive",
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "google_drive_credential",
+          "name": "Google Drive OAuth2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Convert the transcript text into a binary .txt file for upload\nconst data = $('Normalize Folder Data').first().json;\nconst transcript = data.transcript;\nconst filename = data.filename;\nconst folderId = data.folderId;\n\nconst buffer = Buffer.from(transcript, 'utf-8');\n\nreturn [{\n  json: {\n    filename,\n    folderId\n  },\n  binary: {\n    transcriptFile: {\n      data: buffer.toString('base64'),\n      mimeType: 'text/plain',\n      fileName: `${filename}.txt`\n    }\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [4380, 0],
+      "id": "a1b2c3d4-0025-4000-8000-000000000025",
+      "name": "Create Transcript File"
+    },
+    {
+      "parameters": {
+        "name": "={{ $json.filename }}.txt",
+        "folderId": {
+          "__rl": true,
+          "value": "={{ $json.folderId }}",
+          "mode": "id"
+        },
+        "inputDataFieldName": "transcriptFile",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [4600, 0],
+      "id": "a1b2c3d4-0026-4000-8000-000000000026",
+      "name": "Upload Transcript to Drive",
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "google_drive_credential",
+          "name": "Google Drive OAuth2"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "GHL Call Webhook": {
+      "main": [
+        [
+          {
+            "node": "Extract Webhook Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Webhook Data": {
+      "main": [
+        [
+          {
+            "node": "Has Recording URL?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Recording URL?": {
+      "main": [
+        [
+          {
+            "node": "Get Contact",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Get User",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Get Location",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Log No Recording",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Contact": {
+      "main": [
+        [
+          {
+            "node": "Merge Contact & User",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get User": {
+      "main": [
+        [
+          {
+            "node": "Merge Contact & User",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Get Location": {
+      "main": [
+        [
+          {
+            "node": "Merge All Data",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge Contact & User": {
+      "main": [
+        [
+          {
+            "node": "Merge All Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge All Data": {
+      "main": [
+        [
+          {
+            "node": "Build Filename & Names",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Filename & Names": {
+      "main": [
+        [
+          {
+            "node": "Download Recording MP3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download Recording MP3": {
+      "main": [
+        [
+          {
+            "node": "Transcribe with ElevenLabs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Transcribe with ElevenLabs": {
+      "main": [
+        [
+          {
+            "node": "Transcription OK?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Transcription OK?": {
+      "main": [
+        [
+          {
+            "node": "Format Transcript",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Log Transcription Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Transcript": {
+      "main": [
+        [
+          {
+            "node": "Prepare Upload Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Upload Data": {
+      "main": [
+        [
+          {
+            "node": "Search Drive Folder",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Search Drive Folder": {
+      "main": [
+        [
+          {
+            "node": "Check Folder Exists",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Folder Exists": {
+      "main": [
+        [
+          {
+            "node": "Folder Needs Creation?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Folder Needs Creation?": {
+      "main": [
+        [
+          {
+            "node": "Create Drive Folder",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Merge Folder Result",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Create Drive Folder": {
+      "main": [
+        [
+          {
+            "node": "Set New Folder ID",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set New Folder ID": {
+      "main": [
+        [
+          {
+            "node": "Merge Folder Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge Folder Result": {
+      "main": [
+        [
+          {
+            "node": "Normalize Folder Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Folder Data": {
+      "main": [
+        [
+          {
+            "node": "Upload MP3 to Drive",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Create Transcript File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Transcript File": {
+      "main": [
+        [
+          {
+            "node": "Upload Transcript to Drive",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 1
+}
