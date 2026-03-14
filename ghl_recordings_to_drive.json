@@ -1,0 +1,822 @@
+{
+  "name": "GHL_Recordings_To_Drive",
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [220, 300],
+      "id": "c1000001-0001-4000-8000-000000000001",
+      "name": "Manual Trigger"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Paginate through ALL conversations using nextPage\nconst locationId = '9oW28j2SxdPAmUhO5MDI';\nconst allConversations = [];\nlet nextPage = null;\nlet page = 0;\n\ndo {\n  page++;\n  let url = `https://services.leadconnectorhq.com/conversations/search?locationId=${locationId}&limit=100`;\n  if (nextPage) {\n    url += `&startAfterId=${nextPage}`;\n  }\n\n  const response = await this.helpers.httpRequest({\n    method: 'GET',\n    url,\n    headers: {\n      'Authorization': 'Bearer pit-7af79179-2a7e-455f-a685-1b7c15d55547',\n      'Version': '2021-07-28'\n    },\n    json: true\n  });\n\n  const conversations = response.conversations || [];\n  allConversations.push(...conversations);\n  nextPage = response.nextPage || null;\n\n  // Safety: rate limit pause\n  if (nextPage) {\n    await new Promise(resolve => setTimeout(resolve, 500));\n  }\n} while (nextPage);\n\nif (allConversations.length === 0) {\n  throw new Error('No conversations found for this location.');\n}\n\n// Output each conversation as a separate item\nreturn allConversations.map(conv => ({\n  json: {\n    conversationId: conv.id,\n    contactId: conv.contactId || '',\n    locationId,\n    contactName: conv.contactName || conv.fullName || '',\n    lastMessageDate: conv.lastMessageDate || ''\n  }\n}));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [460, 300],
+      "id": "c1000001-0002-4000-8000-000000000002",
+      "name": "Fetch All Conversations (Paginated)"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [700, 300],
+      "id": "c1000001-0003-4000-8000-000000000003",
+      "name": "Loop Conversations"
+    },
+    {
+      "parameters": {
+        "url": "=https://services.leadconnectorhq.com/conversations/{{ $json.conversationId }}/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer pit-7af79179-2a7e-455f-a685-1b7c15d55547"
+            },
+            {
+              "name": "Version",
+              "value": "2021-07-28"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [940, 300],
+      "id": "c1000001-0004-4000-8000-000000000004",
+      "name": "Get Conversation Messages",
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "url": "=https://services.leadconnectorhq.com/contacts/{{ $('Loop Conversations').first().json.contactId }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer pit-7af79179-2a7e-455f-a685-1b7c15d55547"
+            },
+            {
+              "name": "Version",
+              "value": "2021-07-28"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [940, 100],
+      "id": "c1000001-0005-4000-8000-000000000005",
+      "name": "Get Contact Info",
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineAll",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [1180, 200],
+      "id": "c1000001-0006-4000-8000-000000000006",
+      "name": "Merge Messages & Contact"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Build the full conversation TXT, identify valid call messages, and prepare contact info\nconst input = $input.first().json;\nconst convData = $('Loop Conversations').first().json;\n\n// Extract messages\nconst messagesResponse = input.messages || input.data || [];\nconst messages = Array.isArray(messagesResponse) ? messagesResponse : [];\n\n// Extract contact info\nconst contact = input.contact || input;\nconst firstName = (contact.firstName || contact.first_name || 'unknown').toLowerCase().trim();\nconst lastName = (contact.lastName || contact.last_name || 'unknown').toLowerCase().trim();\n\n// Sort messages chronologically\nconst sorted = [...messages].sort((a, b) => {\n  const dateA = new Date(a.dateAdded || a.createdAt || 0);\n  const dateB = new Date(b.dateAdded || b.createdAt || 0);\n  return dateA - dateB;\n});\n\n// Build conversation TXT\nconst lines = sorted.map(msg => {\n  const date = new Date(msg.dateAdded || msg.createdAt || new Date());\n  const ts = date.toISOString().replace('T', ' ').substring(0, 16);\n  const msgType = msg.type || msg.messageType || 'UNKNOWN';\n  const direction = msg.direction || 'unknown';\n  let body = msg.body || '';\n\n  // For call messages, format with call metadata\n  if (msgType === 'TYPE_CALL') {\n    const duration = msg.meta?.call?.duration || msg.meta?.duration || 0;\n    const status = msg.meta?.call?.status || msg.status || 'unknown';\n    body = `Call - ${duration} seconds - ${status}`;\n    if (msg.body && msg.body.trim()) {\n      body += ` | ${msg.body.trim()}`;\n    }\n  }\n\n  return `[${ts}] ${msgType} (${direction}): ${body}`;\n});\n\nconst conversationTxt = lines.join('\\n');\n\n// Find valid call messages: TYPE_CALL with duration > 30\nconst validCalls = sorted.filter(msg => {\n  const msgType = msg.type || msg.messageType || '';\n  if (msgType !== 'TYPE_CALL') return false;\n  const duration = msg.meta?.call?.duration || msg.meta?.duration || 0;\n  return duration > 30;\n});\n\n// Determine the earliest message date for filename\nconst earliestDate = sorted.length > 0\n  ? new Date(sorted[0].dateAdded || sorted[0].createdAt || new Date())\n  : new Date();\nconst dateStr = earliestDate.toISOString().split('T')[0];\n\nconst baseFilename = `${firstName}-${lastName}_${dateStr}`;\n\nreturn [{\n  json: {\n    conversationId: convData.conversationId,\n    contactId: convData.contactId,\n    firstName,\n    lastName,\n    baseFilename,\n    dateStr,\n    conversationTxt,\n    validCalls: validCalls.map(c => ({\n      messageId: c.id,\n      dateAdded: c.dateAdded || c.createdAt || '',\n      duration: c.meta?.call?.duration || c.meta?.duration || 0\n    })),\n    hasValidCalls: validCalls.length > 0\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1420, 200],
+      "id": "c1000001-0007-4000-8000-000000000007",
+      "name": "Build Conversation & Find Calls"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Search for or create the \"Strong Pilates Lakeview\" folder in Google Drive\nconst folderName = 'Strong Pilates Lakeview';\n\ntry {\n  // Search for existing folder\n  const searchResponse = await this.helpers.httpRequestWithAuthentication.call(\n    this,\n    'googleDriveOAuth2Api',\n    {\n      method: 'GET',\n      url: 'https://www.googleapis.com/drive/v3/files',\n      qs: {\n        q: `mimeType='application/vnd.google-apps.folder' and name='${folderName}' and trashed=false`,\n        fields: 'files(id,name)'\n      },\n      json: true\n    }\n  );\n\n  const files = searchResponse.files || [];\n  let folderId;\n\n  if (files.length > 0) {\n    folderId = files[0].id;\n  } else {\n    // Create the folder\n    const createResponse = await this.helpers.httpRequestWithAuthentication.call(\n      this,\n      'googleDriveOAuth2Api',\n      {\n        method: 'POST',\n        url: 'https://www.googleapis.com/drive/v3/files',\n        body: {\n          name: folderName,\n          mimeType: 'application/vnd.google-apps.folder'\n        },\n        json: true\n      }\n    );\n    folderId = createResponse.id;\n  }\n\n  const prevData = $input.first().json;\n  return [{\n    json: {\n      ...prevData,\n      folderId,\n      folderName\n    }\n  }];\n} catch (error) {\n  const prevData = $input.first().json;\n  console.log(`Error finding/creating Drive folder: ${error.message}`);\n  return [{\n    json: {\n      ...prevData,\n      folderId: null,\n      folderName,\n      folderError: error.message\n    }\n  }];\n}"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1660, 200],
+      "id": "c1000001-0008-4000-8000-000000000008",
+      "name": "Get or Create Drive Folder",
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "google_drive_credential",
+          "name": "Google Drive OAuth2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Create the conversation TXT as binary and upload to Google Drive\nconst data = $input.first().json;\nconst conversationTxt = data.conversationTxt;\nconst filename = `${data.baseFilename}_conversation.txt`;\n\nconst buffer = Buffer.from(conversationTxt || '(No messages)', 'utf-8');\n\nreturn [{\n  json: {\n    ...data,\n    convFilename: filename\n  },\n  binary: {\n    conversationFile: {\n      data: buffer.toString('base64'),\n      mimeType: 'text/plain',\n      fileName: filename\n    }\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1900, 200],
+      "id": "c1000001-0009-4000-8000-000000000009",
+      "name": "Create Conversation TXT File"
+    },
+    {
+      "parameters": {
+        "name": "={{ $json.convFilename }}",
+        "folderId": {
+          "__rl": true,
+          "value": "={{ $json.folderId }}",
+          "mode": "id"
+        },
+        "inputDataFieldName": "conversationFile",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [2140, 200],
+      "id": "c1000001-0010-4000-8000-000000000010",
+      "name": "Upload Conversation TXT",
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "google_drive_credential",
+          "name": "Google Drive OAuth2"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "condition-has-valid-calls",
+              "leftValue": "={{ $('Build Conversation & Find Calls').first().json.hasValidCalls }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [2380, 200],
+      "id": "c1000001-0011-4000-8000-000000000011",
+      "name": "Has Valid Calls?"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Output each valid call as a separate item for the inner loop\nconst data = $('Build Conversation & Find Calls').first().json;\nconst folderData = $('Get or Create Drive Folder').first().json;\n\nreturn data.validCalls.map(call => ({\n  json: {\n    messageId: call.messageId,\n    dateAdded: call.dateAdded,\n    duration: call.duration,\n    conversationId: data.conversationId,\n    contactId: data.contactId,\n    firstName: data.firstName,\n    lastName: data.lastName,\n    baseFilename: data.baseFilename,\n    folderId: folderData.folderId,\n    folderName: folderData.folderName\n  }\n}));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2620, 100],
+      "id": "c1000001-0012-4000-8000-000000000012",
+      "name": "Split Valid Calls"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [2860, 100],
+      "id": "c1000001-0013-4000-8000-000000000013",
+      "name": "Loop Valid Calls"
+    },
+    {
+      "parameters": {
+        "url": "=https://services.leadconnectorhq.com/conversations/messages/{{ $json.messageId }}/locations/9oW28j2SxdPAmUhO5MDI/recording",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer pit-7af79179-2a7e-455f-a685-1b7c15d55547"
+            },
+            {
+              "name": "Version",
+              "value": "2021-07-28"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [3100, 100],
+      "id": "c1000001-0014-4000-8000-000000000014",
+      "name": "Fetch Call Recording",
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extract recording URL and check if valid\nconst response = $input.first().json;\nconst callData = $('Loop Valid Calls').first().json;\n\nconst recordingUrl = response.url || response.recordingUrl || response.recording_url || response.data?.url || '';\n\nif (!recordingUrl) {\n  console.log(`No recording found for messageId=${callData.messageId}, conversationId=${callData.conversationId}`);\n  return [{\n    json: {\n      ...callData,\n      hasRecording: false,\n      recordingUrl: '',\n      skipReason: 'No recording URL returned (404 or empty)'\n    }\n  }];\n}\n\nreturn [{\n  json: {\n    ...callData,\n    hasRecording: true,\n    recordingUrl\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [3340, 100],
+      "id": "c1000001-0015-4000-8000-000000000015",
+      "name": "Check Recording Response"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "condition-has-recording",
+              "leftValue": "={{ $json.hasRecording }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [3580, 100],
+      "id": "c1000001-0016-4000-8000-000000000016",
+      "name": "Has Recording?"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Log: no recording for this call\nconst data = $json;\nconsole.log(`SKIP: No recording for messageId=${data.messageId}, contactId=${data.contactId}, conversationId=${data.conversationId}`);\nreturn [{\n  json: {\n    status: 'skipped',\n    reason: data.skipReason || 'No recording found',\n    messageId: data.messageId,\n    contactId: data.contactId,\n    conversationId: data.conversationId,\n    timestamp: new Date().toISOString()\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [3820, 300],
+      "id": "c1000001-0017-4000-8000-000000000017",
+      "name": "Log No Recording"
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.recordingUrl }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file",
+              "outputPropertyName": "recordingFile"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [3820, -100],
+      "id": "c1000001-0018-4000-8000-000000000018",
+      "name": "Download Recording MP3",
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Build filename for this specific call recording\nconst callData = $('Has Recording?').first().json;\nconst callDate = new Date(callData.dateAdded || new Date());\nconst dateStr = callDate.toISOString().split('T')[0];\nconst callFilename = `${callData.firstName}-${callData.lastName}_${dateStr}`;\n\nreturn [{\n  json: {\n    ...callData,\n    callFilename,\n    callDateStr: dateStr\n  },\n  binary: $input.first().binary\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [4060, -100],
+      "id": "c1000001-0019-4000-8000-000000000019",
+      "name": "Build Call Filename"
+    },
+    {
+      "parameters": {
+        "name": "={{ $json.callFilename }}.mp3",
+        "folderId": {
+          "__rl": true,
+          "value": "={{ $json.folderId }}",
+          "mode": "id"
+        },
+        "inputDataFieldName": "recordingFile",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [4300, -100],
+      "id": "c1000001-0020-4000-8000-000000000020",
+      "name": "Upload MP3 to Drive",
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "google_drive_credential",
+          "name": "Google Drive OAuth2"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.elevenlabs.io/v1/speech-to-text",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendBody": true,
+        "contentType": "multipart-form-data",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "file",
+              "parameterType": "formBinaryData",
+              "inputDataFieldName": "recordingFile"
+            },
+            {
+              "name": "model_id",
+              "value": "scribe_v1"
+            },
+            {
+              "name": "diarize",
+              "value": "true"
+            },
+            {
+              "name": "language_code",
+              "value": "eng"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 300000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [4540, -100],
+      "id": "c1000001-0021-4000-8000-000000000021",
+      "name": "Transcribe with ElevenLabs",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "elevenlabs_api_credential",
+          "name": "ElevenLabs API Key"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "condition-transcription-ok",
+              "leftValue": "={{ $json.words }}",
+              "rightValue": "",
+              "operator": {
+                "type": "array",
+                "operation": "notEmpty"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [4780, -100],
+      "id": "c1000001-0022-4000-8000-000000000022",
+      "name": "Transcription OK?"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Log transcription failure\nconst callData = $('Build Call Filename').first().json;\nconsole.log(`TRANSCRIPTION FAILED: messageId=${callData.messageId}, contactId=${callData.contactId}, conversationId=${callData.conversationId}`);\nreturn [{\n  json: {\n    status: 'error',\n    reason: 'Transcription failed or returned no words',\n    messageId: callData.messageId,\n    contactId: callData.contactId,\n    conversationId: callData.conversationId,\n    filename: callData.callFilename,\n    timestamp: new Date().toISOString()\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [5020, 100],
+      "id": "c1000001-0023-4000-8000-000000000023",
+      "name": "Log Transcription Error"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Format ElevenLabs Scribe transcript into timestamped dialogue\n// Speaker 0 = Rep, Speaker 1 = Lead\nconst transcriptionData = $('Transcribe with ElevenLabs').first().json;\nconst callData = $('Build Call Filename').first().json;\n\nconst words = transcriptionData.words || [];\n\nif (words.length === 0) {\n  return [{\n    json: {\n      transcript: '(No speech detected)',\n      callFilename: callData.callFilename,\n      folderId: callData.folderId\n    }\n  }];\n}\n\n// Group words into utterances by speaker changes\nconst utterances = [];\nlet currentSpeaker = null;\nlet currentWords = [];\nlet currentStart = 0;\n\nfor (const word of words) {\n  const speaker = word.speaker_id !== undefined ? word.speaker_id : (word.speaker ?? null);\n\n  if (speaker !== currentSpeaker && currentWords.length > 0) {\n    utterances.push({\n      speaker: currentSpeaker,\n      text: currentWords.join(' '),\n      start: currentStart\n    });\n    currentWords = [];\n  }\n\n  if (currentWords.length === 0) {\n    currentStart = word.start_time || word.start || 0;\n    currentSpeaker = speaker;\n  }\n\n  currentWords.push(word.text || word.word || '');\n}\n\nif (currentWords.length > 0) {\n  utterances.push({\n    speaker: currentSpeaker,\n    text: currentWords.join(' '),\n    start: currentStart\n  });\n}\n\nfunction formatTime(seconds) {\n  const h = Math.floor(seconds / 3600).toString().padStart(2, '0');\n  const m = Math.floor((seconds % 3600) / 60).toString().padStart(2, '0');\n  const s = Math.floor(seconds % 60).toString().padStart(2, '0');\n  return `[${h}:${m}:${s}]`;\n}\n\nconst lines = utterances.map(u => {\n  const speakerNum = parseInt(u.speaker, 10);\n  let label;\n  if (speakerNum === 0) {\n    label = 'Rep';\n  } else if (speakerNum === 1) {\n    label = 'Lead';\n  } else {\n    label = `Speaker ${u.speaker}`;\n  }\n  return `${formatTime(u.start)} ${label}: ${u.text.trim()}`;\n});\n\nconst transcript = lines.join('\\n');\n\nreturn [{\n  json: {\n    transcript,\n    callFilename: callData.callFilename,\n    folderId: callData.folderId\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [5020, -300],
+      "id": "c1000001-0024-4000-8000-000000000024",
+      "name": "Format Transcript"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Convert transcript text to binary TXT for upload\nconst data = $input.first().json;\nconst transcript = data.transcript;\nconst filename = `${data.callFilename}_transcript.txt`;\n\nconst buffer = Buffer.from(transcript, 'utf-8');\n\nreturn [{\n  json: {\n    transcriptFilename: filename,\n    folderId: data.folderId\n  },\n  binary: {\n    transcriptFile: {\n      data: buffer.toString('base64'),\n      mimeType: 'text/plain',\n      fileName: filename\n    }\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [5260, -300],
+      "id": "c1000001-0025-4000-8000-000000000025",
+      "name": "Create Transcript TXT File"
+    },
+    {
+      "parameters": {
+        "name": "={{ $json.transcriptFilename }}",
+        "folderId": {
+          "__rl": true,
+          "value": "={{ $json.folderId }}",
+          "mode": "id"
+        },
+        "inputDataFieldName": "transcriptFile",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [5500, -300],
+      "id": "c1000001-0026-4000-8000-000000000026",
+      "name": "Upload Transcript to Drive",
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "google_drive_credential",
+          "name": "Google Drive OAuth2"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Rate limit delay between call processing\nawait new Promise(resolve => setTimeout(resolve, 500));\nreturn $input.all();"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [5740, 100],
+      "id": "c1000001-0027-4000-8000-000000000027",
+      "name": "Rate Limit Delay"
+    }
+  ],
+  "connections": {
+    "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "Fetch All Conversations (Paginated)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch All Conversations (Paginated)": {
+      "main": [
+        [
+          {
+            "node": "Loop Conversations",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Conversations": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Get Conversation Messages",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Get Contact Info",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Conversation Messages": {
+      "main": [
+        [
+          {
+            "node": "Merge Messages & Contact",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Contact Info": {
+      "main": [
+        [
+          {
+            "node": "Merge Messages & Contact",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge Messages & Contact": {
+      "main": [
+        [
+          {
+            "node": "Build Conversation & Find Calls",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Conversation & Find Calls": {
+      "main": [
+        [
+          {
+            "node": "Get or Create Drive Folder",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get or Create Drive Folder": {
+      "main": [
+        [
+          {
+            "node": "Create Conversation TXT File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Conversation TXT File": {
+      "main": [
+        [
+          {
+            "node": "Upload Conversation TXT",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upload Conversation TXT": {
+      "main": [
+        [
+          {
+            "node": "Has Valid Calls?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Valid Calls?": {
+      "main": [
+        [
+          {
+            "node": "Split Valid Calls",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Loop Conversations",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Valid Calls": {
+      "main": [
+        [
+          {
+            "node": "Loop Valid Calls",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Valid Calls": {
+      "main": [
+        [
+          {
+            "node": "Loop Conversations",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Fetch Call Recording",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Call Recording": {
+      "main": [
+        [
+          {
+            "node": "Check Recording Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Recording Response": {
+      "main": [
+        [
+          {
+            "node": "Has Recording?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Recording?": {
+      "main": [
+        [
+          {
+            "node": "Download Recording MP3",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Log No Recording",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log No Recording": {
+      "main": [
+        [
+          {
+            "node": "Rate Limit Delay",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download Recording MP3": {
+      "main": [
+        [
+          {
+            "node": "Build Call Filename",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Call Filename": {
+      "main": [
+        [
+          {
+            "node": "Upload MP3 to Drive",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Transcribe with ElevenLabs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Transcribe with ElevenLabs": {
+      "main": [
+        [
+          {
+            "node": "Transcription OK?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Transcription OK?": {
+      "main": [
+        [
+          {
+            "node": "Format Transcript",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Log Transcription Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Transcription Error": {
+      "main": [
+        [
+          {
+            "node": "Rate Limit Delay",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Transcript": {
+      "main": [
+        [
+          {
+            "node": "Create Transcript TXT File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Transcript TXT File": {
+      "main": [
+        [
+          {
+            "node": "Upload Transcript to Drive",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upload Transcript to Drive": {
+      "main": [
+        [
+          {
+            "node": "Rate Limit Delay",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Rate Limit Delay": {
+      "main": [
+        [
+          {
+            "node": "Loop Valid Calls",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 0
+}
