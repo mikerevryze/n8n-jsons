@@ -1,0 +1,638 @@
+{
+  "name": "GHL_Bulk_Recordings_To_Drive_v2",
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [220, 300],
+      "id": "d1000001-0001-4000-8000-000000000001",
+      "name": "Manual Trigger"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Paginate through ALL conversations\nconst locationId = '9oW28j2SxdPAmUhO5MDI';\nconst allConversations = [];\nlet nextPage = null;\n\ndo {\n  let url = `https://services.leadconnectorhq.com/conversations/search?locationId=${locationId}&limit=100`;\n  if (nextPage) {\n    url += `&startAfterId=${nextPage}`;\n  }\n\n  const response = await this.helpers.httpRequest({\n    method: 'GET',\n    url,\n    headers: {\n      'Authorization': 'Bearer pit-7af79179-2a7e-455f-a685-1b7c15d55547',\n      'Version': '2021-07-28'\n    },\n    json: true\n  });\n\n  const conversations = response.conversations || [];\n  allConversations.push(...conversations);\n  nextPage = response.nextPage || null;\n\n  if (nextPage) {\n    await new Promise(resolve => setTimeout(resolve, 500));\n  }\n} while (nextPage);\n\nif (allConversations.length === 0) {\n  throw new Error('No conversations found for this location.');\n}\n\nreturn allConversations.map(conv => ({\n  json: {\n    conversationId: conv.id,\n    contactId: conv.contactId || '',\n    locationId\n  }\n}));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [460, 300],
+      "id": "d1000001-0002-4000-8000-000000000002",
+      "name": "Fetch All Conversations"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [700, 300],
+      "id": "d1000001-0003-4000-8000-000000000003",
+      "name": "Loop Conversations"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Fetch all messages for this conversation, paginated\nconst convData = $('Loop Conversations').first().json;\nconst conversationId = convData.conversationId;\nconst allMessages = [];\nlet lastMessageId = null;\n\ndo {\n  let url = `https://services.leadconnectorhq.com/conversations/${conversationId}/messages`;\n  if (lastMessageId) {\n    url += `?lastMessageId=${lastMessageId}`;\n  }\n\n  let response;\n  try {\n    response = await this.helpers.httpRequest({\n      method: 'GET',\n      url,\n      headers: {\n        'Authorization': 'Bearer pit-7af79179-2a7e-455f-a685-1b7c15d55547',\n        'Version': '2021-07-28'\n      },\n      json: true\n    });\n  } catch (e) {\n    // API error — skip this conversation\n    break;\n  }\n\n  // Handle various response shapes\n  let messages = [];\n  if (Array.isArray(response.messages)) {\n    messages = response.messages;\n  } else if (response.messages && Array.isArray(response.messages.messages)) {\n    messages = response.messages.messages;\n  } else if (Array.isArray(response)) {\n    messages = response;\n  }\n\n  allMessages.push(...messages);\n\n  lastMessageId = response.lastMessageId || null;\n  if (messages.length === 0) break;\n\n  if (lastMessageId) {\n    await new Promise(resolve => setTimeout(resolve, 300));\n  }\n} while (lastMessageId);\n\n// Filter to valid calls: TYPE_CALL with duration > 30s\nconst validCalls = allMessages.filter(msg => {\n  const msgType = msg.type || msg.messageType || '';\n  if (msgType !== 'TYPE_CALL') return false;\n  const duration = msg.meta?.call?.duration || msg.meta?.duration || 0;\n  return duration > 30;\n});\n\nif (validCalls.length === 0) {\n  // No valid calls — output with flag so we can skip\n  return [{ json: { conversationId, contactId: convData.contactId, locationId: convData.locationId, hasValidCalls: false, validCalls: [] } }];\n}\n\nreturn [{\n  json: {\n    conversationId,\n    contactId: convData.contactId,\n    locationId: convData.locationId,\n    hasValidCalls: true,\n    validCalls: validCalls.map(c => ({\n      messageId: c.id,\n      dateAdded: c.dateAdded || c.createdAt || '',\n      duration: c.meta?.call?.duration || c.meta?.duration || 0\n    }))\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [940, 300],
+      "id": "d1000001-0004-4000-8000-000000000004",
+      "name": "Fetch Messages & Find Calls"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "condition-has-valid-calls",
+              "leftValue": "={{ $json.hasValidCalls }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [1180, 300],
+      "id": "d1000001-0005-4000-8000-000000000005",
+      "name": "Has Valid Calls?"
+    },
+    {
+      "parameters": {
+        "url": "=https://services.leadconnectorhq.com/contacts/{{ $json.contactId }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer pit-7af79179-2a7e-455f-a685-1b7c15d55547"
+            },
+            {
+              "name": "Version",
+              "value": "2021-07-28"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1420, 200],
+      "id": "d1000001-0006-4000-8000-000000000006",
+      "name": "Get Contact Info",
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extract contact name, output each valid call as a separate item\nconst prevData = $('Has Valid Calls?').first().json;\nconst contactInput = $input.first().json;\n\nconst contact = contactInput.contact || contactInput;\nconst firstName = (contact.firstName || contact.first_name || 'unknown').toLowerCase().trim();\nconst lastName = (contact.lastName || contact.last_name || 'unknown').toLowerCase().trim();\n\nreturn prevData.validCalls.map(call => {\n  const callDate = new Date(call.dateAdded || new Date());\n  const dateStr = callDate.toISOString().split('T')[0];\n  const filename = `${firstName}-${lastName}_${dateStr}`;\n\n  return {\n    json: {\n      messageId: call.messageId,\n      duration: call.duration,\n      dateAdded: call.dateAdded,\n      conversationId: prevData.conversationId,\n      contactId: prevData.contactId,\n      locationId: prevData.locationId,\n      firstName,\n      lastName,\n      filename\n    }\n  };\n});"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1660, 200],
+      "id": "d1000001-0007-4000-8000-000000000007",
+      "name": "Build Call Items"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [1900, 200],
+      "id": "d1000001-0008-4000-8000-000000000008",
+      "name": "Loop Calls"
+    },
+    {
+      "parameters": {
+        "url": "=https://services.leadconnectorhq.com/conversations/messages/{{ $json.messageId }}/locations/{{ $json.locationId }}/recording",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer pit-7af79179-2a7e-455f-a685-1b7c15d55547"
+            },
+            {
+              "name": "Version",
+              "value": "2021-07-28"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2140, 200],
+      "id": "d1000001-0009-4000-8000-000000000009",
+      "name": "Fetch Recording URL",
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extract recording URL from GHL response\nconst response = $input.first().json;\nconst callData = $('Loop Calls').first().json;\n\nconst recordingUrl = response.url || response.recordingUrl || response.recording_url || response.data?.url || '';\n\nreturn [{\n  json: {\n    ...callData,\n    recordingUrl,\n    hasRecording: !!recordingUrl\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2380, 200],
+      "id": "d1000001-0010-4000-8000-000000000010",
+      "name": "Extract Recording URL"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "condition-has-recording",
+              "leftValue": "={{ $json.hasRecording }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [2620, 200],
+      "id": "d1000001-0011-4000-8000-000000000011",
+      "name": "Has Recording?"
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.recordingUrl }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file",
+              "outputPropertyName": "recordingFile"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2860, 100],
+      "id": "d1000001-0012-4000-8000-000000000012",
+      "name": "Download MP3",
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Search for subaccount folder in Google Drive\nconst subaccountName = 'Strong Pilates Lakeview';\nconst callData = $('Has Recording?').first().json;\n\nconst searchResponse = await this.helpers.httpRequestWithAuthentication.call(\n  this,\n  'googleDriveOAuth2Api',\n  {\n    method: 'GET',\n    url: 'https://www.googleapis.com/drive/v3/files',\n    qs: {\n      q: `mimeType='application/vnd.google-apps.folder' and name='${subaccountName}' and trashed=false`,\n      fields: 'files(id,name)'\n    },\n    json: true\n  }\n);\n\nconst files = searchResponse.files || [];\nlet folderId;\n\nif (files.length > 0) {\n  folderId = files[0].id;\n} else {\n  // Create the folder\n  const createResponse = await this.helpers.httpRequestWithAuthentication.call(\n    this,\n    'googleDriveOAuth2Api',\n    {\n      method: 'POST',\n      url: 'https://www.googleapis.com/drive/v3/files',\n      body: {\n        name: subaccountName,\n        mimeType: 'application/vnd.google-apps.folder'\n      },\n      json: true\n    }\n  );\n  folderId = createResponse.id;\n}\n\nreturn [{\n  json: {\n    ...callData,\n    folderId,\n    subaccountName\n  },\n  binary: $input.first().binary\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [3100, 100],
+      "id": "d1000001-0013-4000-8000-000000000013",
+      "name": "Get or Create Drive Folder",
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "google_drive_credential",
+          "name": "Google Drive OAuth2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "name": "={{ $json.filename }}.mp3",
+        "folderId": {
+          "__rl": true,
+          "value": "={{ $json.folderId }}",
+          "mode": "id"
+        },
+        "inputDataFieldName": "recordingFile",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [3340, 0],
+      "id": "d1000001-0014-4000-8000-000000000014",
+      "name": "Upload MP3 to Drive",
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "google_drive_credential",
+          "name": "Google Drive OAuth2"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.elevenlabs.io/v1/speech-to-text",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendBody": true,
+        "contentType": "multipart-form-data",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "file",
+              "parameterType": "formBinaryData",
+              "inputDataFieldName": "recordingFile"
+            },
+            {
+              "name": "model_id",
+              "value": "scribe_v1"
+            },
+            {
+              "name": "diarize",
+              "value": "true"
+            },
+            {
+              "name": "language_code",
+              "value": "eng"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 300000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [3340, 200],
+      "id": "d1000001-0015-4000-8000-000000000015",
+      "name": "Transcribe with ElevenLabs",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "elevenlabs_api_credential",
+          "name": "ElevenLabs API Key"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "condition-transcription-ok",
+              "leftValue": "={{ $json.words }}",
+              "rightValue": "",
+              "operator": {
+                "type": "array",
+                "operation": "notEmpty"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [3580, 200],
+      "id": "d1000001-0016-4000-8000-000000000016",
+      "name": "Transcription OK?"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Format ElevenLabs transcript into timestamped dialogue\nconst transcriptionData = $('Transcribe with ElevenLabs').first().json;\nconst callData = $('Get or Create Drive Folder').first().json;\n\nconst words = transcriptionData.words || [];\n\nif (words.length === 0) {\n  return [{\n    json: {\n      transcript: '(No speech detected)',\n      filename: callData.filename,\n      folderId: callData.folderId\n    }\n  }];\n}\n\n// Group words into utterances by speaker\nconst utterances = [];\nlet currentSpeaker = null;\nlet currentWords = [];\nlet currentStart = 0;\n\nfor (const word of words) {\n  const speaker = word.speaker_id !== undefined ? word.speaker_id : (word.speaker ?? null);\n\n  if (speaker !== currentSpeaker && currentWords.length > 0) {\n    utterances.push({ speaker: currentSpeaker, text: currentWords.join(' '), start: currentStart });\n    currentWords = [];\n  }\n\n  if (currentWords.length === 0) {\n    currentStart = word.start_time || word.start || 0;\n    currentSpeaker = speaker;\n  }\n\n  currentWords.push(word.text || word.word || '');\n}\n\nif (currentWords.length > 0) {\n  utterances.push({ speaker: currentSpeaker, text: currentWords.join(' '), start: currentStart });\n}\n\nfunction formatTime(seconds) {\n  const h = Math.floor(seconds / 3600).toString().padStart(2, '0');\n  const m = Math.floor((seconds % 3600) / 60).toString().padStart(2, '0');\n  const s = Math.floor(seconds % 60).toString().padStart(2, '0');\n  return `[${h}:${m}:${s}]`;\n}\n\nconst lines = utterances.map(u => {\n  const speakerNum = parseInt(u.speaker, 10);\n  const label = speakerNum === 0 ? 'Rep' : speakerNum === 1 ? 'Lead' : `Speaker ${u.speaker}`;\n  return `${formatTime(u.start)} ${label}: ${u.text.trim()}`;\n});\n\nreturn [{\n  json: {\n    transcript: lines.join('\\n'),\n    filename: callData.filename,\n    folderId: callData.folderId\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [3820, 100],
+      "id": "d1000001-0017-4000-8000-000000000017",
+      "name": "Format Transcript"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Convert transcript to binary TXT for upload\nconst data = $input.first().json;\nconst buffer = Buffer.from(data.transcript, 'utf-8');\n\nreturn [{\n  json: {\n    filename: data.filename,\n    folderId: data.folderId\n  },\n  binary: {\n    transcriptFile: {\n      data: buffer.toString('base64'),\n      mimeType: 'text/plain',\n      fileName: `${data.filename}_transcript.txt`\n    }\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [4060, 100],
+      "id": "d1000001-0018-4000-8000-000000000018",
+      "name": "Create Transcript TXT"
+    },
+    {
+      "parameters": {
+        "name": "={{ $json.filename }}_transcript.txt",
+        "folderId": {
+          "__rl": true,
+          "value": "={{ $json.folderId }}",
+          "mode": "id"
+        },
+        "inputDataFieldName": "transcriptFile",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [4300, 100],
+      "id": "d1000001-0019-4000-8000-000000000019",
+      "name": "Upload Transcript to Drive",
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "google_drive_credential",
+          "name": "Google Drive OAuth2"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Rate limit between calls\nawait new Promise(resolve => setTimeout(resolve, 500));\nreturn $input.all();"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [4540, 200],
+      "id": "d1000001-0020-4000-8000-000000000020",
+      "name": "Rate Limit"
+    }
+  ],
+  "connections": {
+    "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "Fetch All Conversations",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch All Conversations": {
+      "main": [
+        [
+          {
+            "node": "Loop Conversations",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Conversations": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Fetch Messages & Find Calls",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Messages & Find Calls": {
+      "main": [
+        [
+          {
+            "node": "Has Valid Calls?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Valid Calls?": {
+      "main": [
+        [
+          {
+            "node": "Get Contact Info",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Loop Conversations",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Contact Info": {
+      "main": [
+        [
+          {
+            "node": "Build Call Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Call Items": {
+      "main": [
+        [
+          {
+            "node": "Loop Calls",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Calls": {
+      "main": [
+        [
+          {
+            "node": "Loop Conversations",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Fetch Recording URL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Recording URL": {
+      "main": [
+        [
+          {
+            "node": "Extract Recording URL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Recording URL": {
+      "main": [
+        [
+          {
+            "node": "Has Recording?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Recording?": {
+      "main": [
+        [
+          {
+            "node": "Download MP3",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Rate Limit",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download MP3": {
+      "main": [
+        [
+          {
+            "node": "Get or Create Drive Folder",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get or Create Drive Folder": {
+      "main": [
+        [
+          {
+            "node": "Upload MP3 to Drive",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Transcribe with ElevenLabs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upload MP3 to Drive": {
+      "main": [
+        []
+      ]
+    },
+    "Transcribe with ElevenLabs": {
+      "main": [
+        [
+          {
+            "node": "Transcription OK?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Transcription OK?": {
+      "main": [
+        [
+          {
+            "node": "Format Transcript",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Rate Limit",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Transcript": {
+      "main": [
+        [
+          {
+            "node": "Create Transcript TXT",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Transcript TXT": {
+      "main": [
+        [
+          {
+            "node": "Upload Transcript to Drive",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upload Transcript to Drive": {
+      "main": [
+        [
+          {
+            "node": "Rate Limit",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Rate Limit": {
+      "main": [
+        [
+          {
+            "node": "Loop Calls",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 0
+}
