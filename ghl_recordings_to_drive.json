@@ -230,18 +230,6 @@
     },
     {
       "parameters": {
-        "mode": "combine",
-        "combineBy": "combineAll",
-        "options": {}
-      },
-      "type": "n8n-nodes-base.merge",
-      "typeVersion": 3,
-      "position": [3000, 200],
-      "id": "c1000001-0036-4000-8000-000000000036",
-      "name": "Merge Folder Result"
-    },
-    {
-      "parameters": {
         "jsCode": "// Normalize the folder data from either path (existing or newly created)\nconst data = $input.first().json;\nreturn [{\n  json: {\n    folderId: data.folderId,\n    folderName: data.folderName,\n    baseFilename: data.baseFilename,\n    conversationTxt: data.conversationTxt,\n    subaccountName: data.subaccountName,\n    conversationId: data.conversationId,\n    contactId: data.contactId,\n    firstName: data.firstName,\n    lastName: data.lastName,\n    dateStr: data.dateStr,\n    validCalls: data.validCalls,\n    hasValidCalls: data.hasValidCalls\n  }\n}];"
       },
       "type": "n8n-nodes-base.code",
@@ -734,9 +722,9 @@
         ],
         [
           {
-            "node": "Merge Folder Result",
+            "node": "Normalize Folder Data",
             "type": "main",
-            "index": 1
+            "index": 0
           }
         ]
       ]
@@ -753,17 +741,6 @@
       ]
     },
     "Set New Folder ID": {
-      "main": [
-        [
-          {
-            "node": "Merge Folder Result",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Merge Folder Result": {
       "main": [
         [
           {
