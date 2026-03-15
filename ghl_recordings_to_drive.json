@@ -31,30 +31,10 @@
     },
     {
       "parameters": {
-        "url": "=https://services.leadconnectorhq.com/conversations/{{ $json.conversationId }}/messages",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "Authorization",
-              "value": "Bearer pit-7af79179-2a7e-455f-a685-1b7c15d55547"
-            },
-            {
-              "name": "Version",
-              "value": "2021-07-28"
-            }
-          ]
-        },
-        "options": {
-          "response": {
-            "response": {
-              "responseFormat": "json"
-            }
-          }
-        }
+        "jsCode": "// Paginate through ALL messages for the current conversation\nconst convData = $('Loop Conversations').first().json;\nconst conversationId = convData.conversationId;\nconst allMessages = [];\nlet lastMessageId = null;\n\ndo {\n  let url = `https://services.leadconnectorhq.com/conversations/${conversationId}/messages`;\n  const params = [];\n  if (lastMessageId) {\n    params.push(`lastMessageId=${lastMessageId}`);\n  }\n  if (params.length > 0) {\n    url += '?' + params.join('&');\n  }\n\n  const response = await this.helpers.httpRequest({\n    method: 'GET',\n    url,\n    headers: {\n      'Authorization': 'Bearer pit-7af79179-2a7e-455f-a685-1b7c15d55547',\n      'Version': '2021-07-28'\n    },\n    json: true\n  });\n\n  // Handle various response shapes from GHL\n  let messages = [];\n  if (Array.isArray(response.messages)) {\n    messages = response.messages;\n  } else if (response.messages && Array.isArray(response.messages.messages)) {\n    messages = response.messages.messages;\n  } else if (Array.isArray(response)) {\n    messages = response;\n  }\n\n  allMessages.push(...messages);\n\n  // Check for next page\n  lastMessageId = response.lastMessageId || response.nextPage || null;\n  // If we got no new messages, stop\n  if (messages.length === 0) break;\n\n  // Rate limit\n  if (lastMessageId) {\n    await new Promise(resolve => setTimeout(resolve, 300));\n  }\n} while (lastMessageId);\n\nreturn [{\n  json: {\n    conversationId,\n    messages: allMessages,\n    messageCount: allMessages.length\n  }\n}];"
       },
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
       "position": [940, 300],
       "id": "c1000001-0004-4000-8000-000000000004",
       "name": "Get Conversation Messages",
@@ -105,7 +85,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Build the full conversation TXT, identify valid call messages, and prepare contact info\n// Reference source nodes directly to avoid merge data-loss issues\nconst messagesInput = $('Get Conversation Messages').first().json;\nconst contactInput = $('Get Contact Info').first().json;\nconst convData = $('Loop Conversations').first().json;\n\n// Extract messages - handle various GHL API response formats\nconst messagesRaw = messagesInput.messages || messagesInput.data?.messages || messagesInput.data || [];\nconst messages = Array.isArray(messagesRaw) ? messagesRaw : [];\n\n// Extract contact info\nconst contact = contactInput.contact || contactInput;\nconst firstName = (contact.firstName || contact.first_name || 'unknown').toLowerCase().trim();\nconst lastName = (contact.lastName || contact.last_name || 'unknown').toLowerCase().trim();\n\n// Sort messages chronologically\nconst sorted = [...messages].sort((a, b) => {\n  const dateA = new Date(a.dateAdded || a.createdAt || 0);\n  const dateB = new Date(b.dateAdded || b.createdAt || 0);\n  return dateA - dateB;\n});\n\n// Build conversation TXT\nconst lines = sorted.map(msg => {\n  const date = new Date(msg.dateAdded || msg.createdAt || new Date());\n  const ts = date.toISOString().replace('T', ' ').substring(0, 16);\n  const msgType = msg.type || msg.messageType || 'UNKNOWN';\n  const direction = msg.direction || 'unknown';\n  let body = msg.body || '';\n\n  // For call messages, format with call metadata\n  if (msgType === 'TYPE_CALL' || msg.messageType === 'TYPE_CALL') {\n    const duration = msg.meta?.call?.duration || msg.meta?.duration || 0;\n    const status = msg.meta?.call?.status || msg.status || 'unknown';\n    body = `Call - ${duration} seconds - ${status}`;\n    if (msg.body && msg.body.trim()) {\n      body += ` | ${msg.body.trim()}`;\n    }\n  }\n\n  return `[${ts}] ${msgType} (${direction}): ${body}`;\n});\n\nconst conversationTxt = lines.join('\\n');\n\n// Find valid call messages: TYPE_CALL with duration > 30\nconst validCalls = sorted.filter(msg => {\n  const msgType = msg.type || msg.messageType || '';\n  if (msgType !== 'TYPE_CALL') return false;\n  const duration = msg.meta?.call?.duration || msg.meta?.duration || 0;\n  return duration > 30;\n});\n\n// Determine the earliest message date for filename\nconst earliestDate = sorted.length > 0\n  ? new Date(sorted[0].dateAdded || sorted[0].createdAt || new Date())\n  : new Date();\nconst dateStr = earliestDate.toISOString().split('T')[0];\n\nconst baseFilename = `${firstName}-${lastName}_${dateStr}`;\n\nreturn [{\n  json: {\n    conversationId: convData.conversationId,\n    contactId: convData.contactId,\n    firstName,\n    lastName,\n    baseFilename,\n    dateStr,\n    conversationTxt,\n    validCalls: validCalls.map(c => ({\n      messageId: c.id,\n      dateAdded: c.dateAdded || c.createdAt || '',\n      duration: c.meta?.call?.duration || c.meta?.duration || 0\n    })),\n    hasValidCalls: validCalls.length > 0\n  }\n}];"
+        "jsCode": "// Build the full conversation TXT, identify valid call messages, and prepare contact info\n// Reference source nodes directly to avoid merge data-loss issues\nconst messagesInput = $('Get Conversation Messages').first().json;\nconst contactInput = $('Get Contact Info').first().json;\nconst convData = $('Loop Conversations').first().json;\n\n// Messages are now pre-extracted by the paginating Code node\nconst messages = Array.isArray(messagesInput.messages) ? messagesInput.messages : [];\n\n// Extract contact info\nconst contact = contactInput.contact || contactInput;\nconst firstName = (contact.firstName || contact.first_name || 'unknown').toLowerCase().trim();\nconst lastName = (contact.lastName || contact.last_name || 'unknown').toLowerCase().trim();\n\n// Sort messages chronologically\nconst sorted = [...messages].sort((a, b) => {\n  const dateA = new Date(a.dateAdded || a.createdAt || 0);\n  const dateB = new Date(b.dateAdded || b.createdAt || 0);\n  return dateA - dateB;\n});\n\n// Build conversation TXT\nconst lines = sorted.map(msg => {\n  const date = new Date(msg.dateAdded || msg.createdAt || new Date());\n  const ts = date.toISOString().replace('T', ' ').substring(0, 16);\n  const msgType = msg.type || msg.messageType || 'UNKNOWN';\n  const direction = msg.direction || 'unknown';\n  let body = msg.body || '';\n\n  // For call messages, format with call metadata\n  if (msgType === 'TYPE_CALL' || msg.messageType === 'TYPE_CALL') {\n    const duration = msg.meta?.call?.duration || msg.meta?.duration || 0;\n    const status = msg.meta?.call?.status || msg.status || 'unknown';\n    body = `Call - ${duration} seconds - ${status}`;\n    if (msg.body && msg.body.trim()) {\n      body += ` | ${msg.body.trim()}`;\n    }\n  }\n\n  return `[${ts}] ${msgType} (${direction}): ${body}`;\n});\n\nconst conversationTxt = lines.join('\\n');\n\n// Find valid call messages: TYPE_CALL with duration > 30\nconst validCalls = sorted.filter(msg => {\n  const msgType = msg.type || msg.messageType || '';\n  if (msgType !== 'TYPE_CALL') return false;\n  const duration = msg.meta?.call?.duration || msg.meta?.duration || 0;\n  return duration > 30;\n});\n\n// Determine the earliest message date for filename\nconst earliestDate = sorted.length > 0\n  ? new Date(sorted[0].dateAdded || sorted[0].createdAt || new Date())\n  : new Date();\nconst dateStr = earliestDate.toISOString().split('T')[0];\n\nconst baseFilename = `${firstName}-${lastName}_${dateStr}`;\n\nreturn [{\n  json: {\n    conversationId: convData.conversationId,\n    contactId: convData.contactId,\n    firstName,\n    lastName,\n    baseFilename,\n    dateStr,\n    conversationTxt,\n    validCalls: validCalls.map(c => ({\n      messageId: c.id,\n      dateAdded: c.dateAdded || c.createdAt || '',\n      duration: c.meta?.call?.duration || c.meta?.duration || 0\n    })),\n    hasValidCalls: validCalls.length > 0\n  }\n}];"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
