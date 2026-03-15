@@ -253,7 +253,7 @@
       },
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [3340, 200],
+      "position": [3580, 0],
       "id": "d1000001-0015-4000-8000-000000000015",
       "name": "Transcribe with ElevenLabs",
       "credentials": {
@@ -346,6 +346,16 @@
       "position": [4540, 200],
       "id": "d1000001-0020-4000-8000-000000000020",
       "name": "Rate Limit"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Restore binary recording data after Google Drive upload (which drops input binary)\nconst folderData = $('Get or Create Drive Folder').first();\nreturn [{\n  json: folderData.json,\n  binary: folderData.binary\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [3460, 0],
+      "id": "d1000001-0021-4000-8000-000000000021",
+      "name": "Restore Binary"
     }
   ],
   "connections": {
@@ -499,18 +509,30 @@
             "node": "Upload MP3 to Drive",
             "type": "main",
             "index": 0
-          },
-          {
-            "node": "Transcribe with ElevenLabs",
-            "type": "main",
-            "index": 0
           }
         ]
       ]
     },
     "Upload MP3 to Drive": {
       "main": [
-        []
+        [
+          {
+            "node": "Restore Binary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Restore Binary": {
+      "main": [
+        [
+          {
+            "node": "Transcribe with ElevenLabs",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     },
     "Transcribe with ElevenLabs": {
