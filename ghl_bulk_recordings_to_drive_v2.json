@@ -11,7 +11,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Paginate through ALL conversations\nconst locationId = '9oW28j2SxdPAmUhO5MDI';\nconst allConversations = [];\nlet nextPage = null;\n\ndo {\n  let url = `https://services.leadconnectorhq.com/conversations/search?locationId=${locationId}&limit=100`;\n  if (nextPage) {\n    url += `&startAfterId=${nextPage}`;\n  }\n\n  const response = await this.helpers.httpRequest({\n    method: 'GET',\n    url,\n    headers: {\n      'Authorization': 'Bearer pit-7af79179-2a7e-455f-a685-1b7c15d55547',\n      'Version': '2021-07-28'\n    },\n    json: true\n  });\n\n  const conversations = response.conversations || [];\n  allConversations.push(...conversations);\n  nextPage = response.nextPage || null;\n\n  if (nextPage) {\n    await new Promise(resolve => setTimeout(resolve, 500));\n  }\n} while (nextPage);\n\nif (allConversations.length === 0) {\n  throw new Error('No conversations found for this location.');\n}\n\nreturn allConversations.map(conv => ({\n  json: {\n    conversationId: conv.id,\n    contactId: conv.contactId || '',\n    locationId\n  }\n}));"
+        "jsCode": "// Paginate through ALL conversations\nconst locationId = '9oW28j2SxdPAmUhO5MDI';\nconst allConversations = [];\nlet nextPage = null;\n\ndo {\n  let url = `https://services.leadconnectorhq.com/conversations/search?locationId=${locationId}&limit=100`;\n  if (nextPage) {\n    url += `&startAfterId=${nextPage}`;\n  }\n\n  const response = await this.helpers.httpRequest({\n    method: 'GET',\n    url,\n    headers: {\n      'Authorization': 'Bearer pit-7af79179-2a7e-455f-a685-1b7c15d55547',\n      'Version': '2021-07-28'\n    },\n    json: true\n  });\n\n  const conversations = response.conversations || [];\n  allConversations.push(...conversations);\n  nextPage = response.nextPage || null;\n\n  if (nextPage) {\n    await new Promise(resolve => setTimeout(resolve, 1000));\n  }\n} while (nextPage);\n\nif (allConversations.length === 0) {\n  throw new Error('No conversations found for this location.');\n}\n\nreturn allConversations.map(conv => ({\n  json: {\n    conversationId: conv.id,\n    contactId: conv.contactId || '',\n    locationId\n  }\n}));"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -31,7 +31,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// DEBUG VERSION — Fetch messages and show all unique types found\nconst convData = $('Loop Conversations').first().json;\nconst conversationId = convData.conversationId;\nconst allMessages = [];\nlet lastMessageId = null;\n\ndo {\n  let url = `https://services.leadconnectorhq.com/conversations/${conversationId}/messages`;\n  if (lastMessageId) {\n    url += `?lastMessageId=${lastMessageId}`;\n  }\n\n  let response;\n  try {\n    response = await this.helpers.httpRequest({\n      method: 'GET',\n      url,\n      headers: {\n        'Authorization': 'Bearer pit-7af79179-2a7e-455f-a685-1b7c15d55547',\n        'Version': '2021-07-28'\n      },\n      json: true\n    });\n  } catch (e) {\n    break;\n  }\n\n  let messages = [];\n  if (Array.isArray(response.messages)) {\n    messages = response.messages;\n  } else if (response.messages && Array.isArray(response.messages.messages)) {\n    messages = response.messages.messages;\n  } else if (Array.isArray(response)) {\n    messages = response;\n  }\n\n  allMessages.push(...messages);\n  lastMessageId = response.lastMessageId || null;\n  if (messages.length === 0) break;\n  if (lastMessageId) {\n    await new Promise(resolve => setTimeout(resolve, 300));\n  }\n} while (lastMessageId);\n\n// Collect all unique type values and sample messages with meta\nconst typeSet = new Set();\nconst samplesByType = {};\nfor (const msg of allMessages) {\n  const t = (msg.type || msg.messageType || 'UNKNOWN').toString();\n  typeSet.add(t);\n  if (!samplesByType[t]) {\n    samplesByType[t] = {\n      type: msg.type,\n      messageType: msg.messageType,\n      contentType: msg.contentType,\n      direction: msg.direction,\n      meta: msg.meta || null,\n      duration: msg.duration || null\n    };\n  }\n}\n\n// Also detect anything that looks like a call\nconst possibleCalls = allMessages.filter(msg => {\n  const t = (msg.type || msg.messageType || '').toString().toLowerCase();\n  return t.includes('call') || msg.meta?.call != null || msg.meta?.callDuration != null || msg.contentType === 'call';\n});\n\nreturn [{\n  json: {\n    conversationId,\n    totalMessages: allMessages.length,\n    uniqueTypes: [...typeSet],\n    samplesByType,\n    possibleCallsFound: possibleCalls.length,\n    possibleCallSample: possibleCalls.length > 0 ? possibleCalls[0] : null,\n    hasValidCalls: false,\n    validCalls: [],\n    contactId: convData.contactId,\n    locationId: convData.locationId\n  }\n}];"
+        "jsCode": "// Fetch all messages for this conversation, paginated\nconst convData = $('Loop Conversations').first().json;\nconst conversationId = convData.conversationId;\nconst allMessages = [];\nlet lastMessageId = null;\n\ndo {\n  let url = `https://services.leadconnectorhq.com/conversations/${conversationId}/messages`;\n  if (lastMessageId) {\n    url += `?lastMessageId=${lastMessageId}`;\n  }\n\n  let response;\n  try {\n    response = await this.helpers.httpRequest({\n      method: 'GET',\n      url,\n      headers: {\n        'Authorization': 'Bearer pit-7af79179-2a7e-455f-a685-1b7c15d55547',\n        'Version': '2021-07-28'\n      },\n      json: true\n    });\n  } catch (e) {\n    break;\n  }\n\n  let messages = [];\n  if (Array.isArray(response.messages)) {\n    messages = response.messages;\n  } else if (response.messages && Array.isArray(response.messages.messages)) {\n    messages = response.messages.messages;\n  } else if (Array.isArray(response)) {\n    messages = response;\n  }\n\n  allMessages.push(...messages);\n  lastMessageId = response.lastMessageId || null;\n  if (messages.length === 0) break;\n  if (lastMessageId) {\n    await new Promise(resolve => setTimeout(resolve, 500));\n  }\n} while (lastMessageId);\n\n// Broad call detection — match every known GHL call type format\nconst validCalls = allMessages.filter(msg => {\n  const msgType = (msg.type || '').toString();\n  const msgMessageType = (msg.messageType || '').toString();\n  const contentType = (msg.contentType || '').toString();\n  const combined = `${msgType} ${msgMessageType} ${contentType}`.toLowerCase();\n\n  const isCall =\n    combined.includes('call') ||\n    msgType === '3' ||\n    msgMessageType === '3' ||\n    msg.meta?.call != null ||\n    msg.meta?.callDuration != null ||\n    msg.meta?.recording != null ||\n    msg.meta?.recordingUrl != null;\n\n  if (!isCall) return false;\n\n  // Duration check — try every known location, default to 0\n  const duration =\n    msg.meta?.call?.duration ||\n    msg.meta?.callDuration ||\n    msg.meta?.duration ||\n    msg.duration ||\n    msg.call?.duration ||\n    0;\n  return duration > 30;\n});\n\n// Collect debug info: all unique types seen (helps diagnose if 0 calls found)\nconst typeSet = new Set();\nfor (const msg of allMessages) {\n  typeSet.add((msg.type || msg.messageType || 'UNKNOWN').toString());\n}\n\nif (validCalls.length === 0) {\n  return [{\n    json: {\n      conversationId,\n      contactId: convData.contactId,\n      locationId: convData.locationId,\n      hasValidCalls: false,\n      validCalls: [],\n      _debug_totalMessages: allMessages.length,\n      _debug_uniqueTypes: [...typeSet]\n    }\n  }];\n}\n\nreturn [{\n  json: {\n    conversationId,\n    contactId: convData.contactId,\n    locationId: convData.locationId,\n    hasValidCalls: true,\n    validCalls: validCalls.map(c => ({\n      messageId: c.id,\n      dateAdded: c.dateAdded || c.createdAt || '',\n      duration: c.meta?.call?.duration || c.meta?.callDuration || c.meta?.duration || c.duration || 0\n    })),\n    _debug_totalMessages: allMessages.length,\n    _debug_uniqueTypes: [...typeSet]\n  }\n}];"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -101,7 +101,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Extract contact name, output each valid call as a separate item\nconst prevData = $('Has Valid Calls?').first().json;\nconst contactInput = $input.first().json;\n\nconst contact = contactInput.contact || contactInput;\nconst firstName = (contact.firstName || contact.first_name || 'unknown').toLowerCase().trim();\nconst lastName = (contact.lastName || contact.last_name || 'unknown').toLowerCase().trim();\n\nreturn prevData.validCalls.map(call => {\n  const callDate = new Date(call.dateAdded || new Date());\n  const dateStr = callDate.toISOString().split('T')[0];\n  const filename = `${firstName}-${lastName}_${dateStr}`;\n\n  return {\n    json: {\n      messageId: call.messageId,\n      duration: call.duration,\n      dateAdded: call.dateAdded,\n      conversationId: prevData.conversationId,\n      contactId: prevData.contactId,\n      locationId: prevData.locationId,\n      firstName,\n      lastName,\n      filename\n    }\n  };\n});"
+        "jsCode": "// Extract contact name, output each valid call as a separate item\nconst prevData = $('Has Valid Calls?').first().json;\nconst contactInput = $input.first().json;\n\n// Robust contact name extraction — handle error responses and missing fields\nconst contact = contactInput.contact || contactInput;\nconst firstName = (contact.firstName || contact.first_name || contact.name || 'unknown').toString().toLowerCase().trim() || 'unknown';\nconst lastName = (contact.lastName || contact.last_name || '').toString().toLowerCase().trim() || 'unknown';\n\nreturn prevData.validCalls.map((call, index) => {\n  const callDate = new Date(call.dateAdded || new Date());\n  const dateStr = callDate.toISOString().split('T')[0];\n  // Include short messageId suffix to prevent duplicate filenames for same-day calls\n  const idSuffix = (call.messageId || '').slice(-6);\n  const filename = `${firstName}-${lastName}_${dateStr}_${idSuffix}`;\n\n  return {\n    json: {\n      messageId: call.messageId,\n      duration: call.duration,\n      dateAdded: call.dateAdded,\n      conversationId: prevData.conversationId,\n      contactId: prevData.contactId,\n      locationId: prevData.locationId,\n      firstName,\n      lastName,\n      filename\n    }\n  };\n});"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -121,44 +121,13 @@
     },
     {
       "parameters": {
-        "url": "=https://services.leadconnectorhq.com/conversations/messages/{{ $json.messageId }}/locations/{{ $json.locationId }}/recording",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "Authorization",
-              "value": "Bearer pit-7af79179-2a7e-455f-a685-1b7c15d55547"
-            },
-            {
-              "name": "Version",
-              "value": "2021-07-28"
-            }
-          ]
-        },
-        "options": {
-          "response": {
-            "response": {
-              "responseFormat": "json"
-            }
-          }
-        }
-      },
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [2140, 200],
-      "id": "d1000001-0009-4000-8000-000000000009",
-      "name": "Fetch Recording URL",
-      "onError": "continueRegularOutput"
-    },
-    {
-      "parameters": {
-        "jsCode": "// Extract recording URL from GHL response\nconst response = $input.first().json;\nconst callData = $('Loop Calls').first().json;\n\nconst recordingUrl = response.url || response.recordingUrl || response.recording_url || response.data?.url || '';\n\nreturn [{\n  json: {\n    ...callData,\n    recordingUrl,\n    hasRecording: !!recordingUrl\n  }\n}];"
+        "jsCode": "// Try multiple GHL recording URL patterns\nconst callData = $('Loop Calls').first().json;\nconst messageId = callData.messageId;\nconst locationId = callData.locationId;\n\nconst urlPatterns = [\n  `https://services.leadconnectorhq.com/conversations/messages/${messageId}/locations/${locationId}/recording`,\n  `https://services.leadconnectorhq.com/conversations/messages/${messageId}/recording`,\n  `https://services.leadconnectorhq.com/locations/${locationId}/recordings/${messageId}`\n];\n\nlet recordingUrl = '';\nlet responseData = null;\n\nfor (const url of urlPatterns) {\n  try {\n    const response = await this.helpers.httpRequest({\n      method: 'GET',\n      url,\n      headers: {\n        'Authorization': 'Bearer pit-7af79179-2a7e-455f-a685-1b7c15d55547',\n        'Version': '2021-07-28'\n      },\n      json: true\n    });\n    responseData = response;\n    recordingUrl = response.url || response.recordingUrl || response.recording_url || response.data?.url || response.data?.recordingUrl || '';\n    if (recordingUrl) break;\n  } catch (e) {\n    continue;\n  }\n}\n\nreturn [{\n  json: {\n    ...callData,\n    recordingUrl,\n    hasRecording: !!recordingUrl,\n    _debug_recordingResponse: responseData\n  }\n}];"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [2380, 200],
-      "id": "d1000001-0010-4000-8000-000000000010",
-      "name": "Extract Recording URL"
+      "position": [2140, 200],
+      "id": "d1000001-0009-4000-8000-000000000009",
+      "name": "Fetch Recording URL"
     },
     {
       "parameters": {
@@ -210,7 +179,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Search for subaccount folder in Google Drive\nconst subaccountName = 'Strong Pilates Lakeview';\nconst callData = $('Has Recording?').first().json;\n\nconst searchResponse = await this.helpers.httpRequestWithAuthentication.call(\n  this,\n  'googleDriveOAuth2Api',\n  {\n    method: 'GET',\n    url: 'https://www.googleapis.com/drive/v3/files',\n    qs: {\n      q: `mimeType='application/vnd.google-apps.folder' and name='${subaccountName}' and trashed=false`,\n      fields: 'files(id,name)'\n    },\n    json: true\n  }\n);\n\nconst files = searchResponse.files || [];\nlet folderId;\n\nif (files.length > 0) {\n  folderId = files[0].id;\n} else {\n  // Create the folder\n  const createResponse = await this.helpers.httpRequestWithAuthentication.call(\n    this,\n    'googleDriveOAuth2Api',\n    {\n      method: 'POST',\n      url: 'https://www.googleapis.com/drive/v3/files',\n      body: {\n        name: subaccountName,\n        mimeType: 'application/vnd.google-apps.folder'\n      },\n      json: true\n    }\n  );\n  folderId = createResponse.id;\n}\n\nreturn [{\n  json: {\n    ...callData,\n    folderId,\n    subaccountName\n  },\n  binary: $input.first().binary\n}];"
+        "jsCode": "// Search for subaccount folder in Google Drive\nconst subaccountName = 'Strong Pilates Lakeview';\nconst callData = $('Has Recording?').first().json;\n\nlet folderId;\ntry {\n  const searchResponse = await this.helpers.httpRequestWithAuthentication.call(\n    this,\n    'googleDriveOAuth2Api',\n    {\n      method: 'GET',\n      url: 'https://www.googleapis.com/drive/v3/files',\n      qs: {\n        q: `mimeType='application/vnd.google-apps.folder' and name='${subaccountName}' and trashed=false`,\n        fields: 'files(id,name)'\n      },\n      json: true\n    }\n  );\n\n  const files = searchResponse.files || [];\n\n  if (files.length > 0) {\n    folderId = files[0].id;\n  } else {\n    const createResponse = await this.helpers.httpRequestWithAuthentication.call(\n      this,\n      'googleDriveOAuth2Api',\n      {\n        method: 'POST',\n        url: 'https://www.googleapis.com/drive/v3/files',\n        body: {\n          name: subaccountName,\n          mimeType: 'application/vnd.google-apps.folder'\n        },\n        json: true\n      }\n    );\n    folderId = createResponse.id;\n  }\n} catch (e) {\n  throw new Error(`Google Drive folder error: ${e.message}`);\n}\n\nreturn [{\n  json: {\n    ...callData,\n    folderId,\n    subaccountName\n  },\n  binary: $input.first().binary\n}];"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -222,7 +191,8 @@
           "id": "google_drive_credential",
           "name": "Google Drive OAuth2"
         }
-      }
+      },
+      "onError": "continueRegularOutput"
     },
     {
       "parameters": {
@@ -369,7 +339,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Rate limit between calls\nawait new Promise(resolve => setTimeout(resolve, 500));\nreturn $input.all();"
+        "jsCode": "// Rate limit between calls\nawait new Promise(resolve => setTimeout(resolve, 1000));\nreturn $input.all();"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -483,17 +453,6 @@
       ]
     },
     "Fetch Recording URL": {
-      "main": [
-        [
-          {
-            "node": "Extract Recording URL",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Extract Recording URL": {
       "main": [
         [
           {
