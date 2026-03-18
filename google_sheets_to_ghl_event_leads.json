@@ -56,6 +56,15 @@
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify({ \"firstName\": $json.firstName, \"lastName\": $json.lastName, \"email\": $json.email, \"phone\": $json.phone, \"locationId\": \"YOUR_GHL_LOCATION_ID\", \"source\": $json.source, \"tags\": [\"event-lead\", $json.eventName], \"customFields\": [{ \"key\": \"event_name\", \"field_value\": $json.eventName }, { \"key\": \"event_notes\", \"field_value\": $json.notes }, { \"key\": \"form_submitted_at\", \"field_value\": $json.timestamp }] }) }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Version",
+              "value": "2021-07-28"
+            }
+          ]
+        },
         "options": {}
       },
       "type": "n8n-nodes-base.httpRequest",
@@ -89,6 +98,15 @@
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify({ \"pipelineId\": \"YOUR_PIPELINE_ID\", \"pipelineStageId\": \"YOUR_STAGE_ID\", \"locationId\": \"YOUR_GHL_LOCATION_ID\", \"contactId\": $json.contactId, \"name\": ($json.firstName || '') + ' ' + ($json.lastName || '') + ' - ' + ($json.eventName || 'Event Lead'), \"source\": $json.source, \"status\": \"open\" }) }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Version",
+              "value": "2021-07-28"
+            }
+          ]
+        },
         "options": {}
       },
       "type": "n8n-nodes-base.httpRequest",
