@@ -49,21 +49,53 @@
     },
     {
       "parameters": {
-        "requestMethod": "POST",
+        "method": "POST",
         "url": "https://services.leadconnectorhq.com/contacts/",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth",
-        "options": {
-          "bodyContentType": "json"
-        },
-        "jsonParameters": true,
-        "bodyParametersJson": "={{ JSON.stringify({ \"firstName\": $json.firstName, \"lastName\": $json.lastName, \"email\": $json.email, \"phone\": $json.phone, \"locationId\": \"YOUR_GHL_LOCATION_ID\", \"source\": $json.source, \"tags\": [\"event-lead\", $json.eventName], \"customFields\": [{ \"key\": \"event_name\", \"field_value\": $json.eventName }, { \"key\": \"event_notes\", \"field_value\": $json.notes }, { \"key\": \"form_submitted_at\", \"field_value\": $json.timestamp }] }) }}"
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ \"firstName\": $json.firstName, \"lastName\": $json.lastName, \"email\": $json.email, \"phone\": $json.phone, \"locationId\": \"YOUR_GHL_LOCATION_ID\", \"source\": $json.source, \"tags\": [\"event-lead\", $json.eventName], \"customFields\": [{ \"key\": \"event_name\", \"field_value\": $json.eventName }, { \"key\": \"event_notes\", \"field_value\": $json.notes }, { \"key\": \"form_submitted_at\", \"field_value\": $json.timestamp }] }) }}",
+        "options": {}
       },
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [700, 200],
+      "position": [700, 300],
       "id": "b2c3d4e5-0003-4000-8000-000000000003",
       "name": "Create GHL Contact",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "",
+          "name": "GHL API Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extract the contact ID from the Create Contact response\nconst response = $input.first().json;\nconst contactId = response.contact?.id || response.id;\nconst leadData = $('Map Lead Fields').first().json;\n\nif (!contactId) {\n  throw new Error('Failed to get contact ID from GHL response');\n}\n\nreturn [{\n  json: {\n    contactId,\n    firstName: leadData.firstName,\n    lastName: leadData.lastName,\n    email: leadData.email,\n    eventName: leadData.eventName,\n    source: leadData.source\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [940, 300],
+      "id": "b2c3d4e5-0007-4000-8000-000000000007",
+      "name": "Extract Contact ID"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://services.leadconnectorhq.com/opportunities/",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ \"pipelineId\": \"YOUR_PIPELINE_ID\", \"pipelineStageId\": \"YOUR_STAGE_ID\", \"locationId\": \"YOUR_GHL_LOCATION_ID\", \"contactId\": $json.contactId, \"name\": ($json.firstName || '') + ' ' + ($json.lastName || '') + ' - ' + ($json.eventName || 'Event Lead'), \"source\": $json.source, \"status\": \"open\" }) }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1180, 300],
+      "id": "b2c3d4e5-0008-4000-8000-000000000008",
+      "name": "Add to Pipeline",
       "credentials": {
         "httpHeaderAuth": {
           "id": "",
@@ -96,27 +128,27 @@
       },
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
-      "position": [940, 200],
+      "position": [1420, 300],
       "id": "b2c3d4e5-0004-4000-8000-000000000004",
       "name": "Check Success"
     },
     {
       "parameters": {
-        "jsCode": "const contact = $input.first().json;\nconst contactId = contact.body?.contact?.id || contact.body?.id || 'unknown';\n\nconsole.log(`Successfully created GHL contact: ${contactId}`);\n\nreturn [{\n  json: {\n    success: true,\n    contactId,\n    message: `Lead created in GHL: ${$('Map Lead Fields').first().json.firstName} ${$('Map Lead Fields').first().json.lastName}`\n  }\n}];"
+        "jsCode": "const opportunity = $input.first().json;\nconst contactId = $('Extract Contact ID').first().json.contactId;\nconst oppId = opportunity.opportunity?.id || opportunity.id || 'unknown';\n\nconsole.log(`Successfully created GHL contact ${contactId} and opportunity ${oppId}`);\n\nreturn [{\n  json: {\n    success: true,\n    contactId,\n    opportunityId: oppId,\n    message: `Lead created and added to pipeline: ${$('Extract Contact ID').first().json.firstName} ${$('Extract Contact ID').first().json.lastName}`\n  }\n}];"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1180, 100],
+      "position": [1660, 200],
       "id": "b2c3d4e5-0005-4000-8000-000000000005",
       "name": "Log Success"
     },
     {
       "parameters": {
-        "jsCode": "const error = $input.first().json;\nconst leadEmail = $('Map Lead Fields').first().json.email;\nconst leadName = `${$('Map Lead Fields').first().json.firstName} ${$('Map Lead Fields').first().json.lastName}`;\n\nconsole.error(`Failed to create GHL contact for ${leadName} (${leadEmail})`);\nconsole.error(JSON.stringify(error, null, 2));\n\nreturn [{\n  json: {\n    success: false,\n    error: error.body || error,\n    leadEmail,\n    leadName,\n    message: `Failed to create lead: ${leadName}`\n  }\n}];"
+        "jsCode": "const error = $input.first().json;\nconst leadData = $('Map Lead Fields').first().json;\nconst leadName = `${leadData.firstName} ${leadData.lastName}`;\n\nconsole.error(`Failed for ${leadName} (${leadData.email})`);\nconsole.error(JSON.stringify(error, null, 2));\n\nreturn [{\n  json: {\n    success: false,\n    error: error.body || error,\n    leadEmail: leadData.email,\n    leadName,\n    message: `Failed to process lead: ${leadName}`\n  }\n}];"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1180, 300],
+      "position": [1660, 400],
       "id": "b2c3d4e5-0006-4000-8000-000000000006",
       "name": "Log Error"
     }
@@ -145,6 +177,28 @@
       ]
     },
     "Create GHL Contact": {
+      "main": [
+        [
+          {
+            "node": "Extract Contact ID",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Contact ID": {
+      "main": [
+        [
+          {
+            "node": "Add to Pipeline",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Add to Pipeline": {
       "main": [
         [
           {
