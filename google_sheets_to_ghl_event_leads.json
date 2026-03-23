@@ -157,7 +157,8 @@
         400
       ],
       "id": "a1b2c3d4-0001-4000-8000-000000000011",
-      "name": "Validate Pipeline"
+      "name": "Validate Pipeline",
+      "onError": "continueErrorOutput"
     },
     {
       "parameters": {
@@ -210,7 +211,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const error = $input.first().json;\nconst leadData = $('Map Lead Fields').first().json;\nconst leadName = `${leadData.firstName} ${leadData.lastName}`;\nconst errorDetail = error.message || error.body || JSON.stringify(error);\n\nconsole.error(`Failed for ${leadName} (${leadData.email}): ${errorDetail}`);\n\nreturn [{\n  json: {\n    success: false,\n    error: errorDetail,\n    leadEmail: leadData.email,\n    leadName,\n    message: `Failed to process lead: ${leadName}`\n  }\n}];"
+        "jsCode": "const error = $input.first().json;\nconst leadData = $('Map Lead Fields').first().json;\nconst leadName = `${leadData.firstName} ${leadData.lastName}`;\n\n// Figure out which step actually failed\nlet failedStep = 'unknown step';\ntry { $('Add to Pipeline').first(); failedStep = 'Add to Pipeline'; } catch(e) {}\ntry { $('Validate Pipeline').first(); if (failedStep === 'unknown step') failedStep = 'Validate Pipeline'; } catch(e) {}\ntry { $('Get Pipelines').first(); if (failedStep === 'unknown step') failedStep = 'Get Pipelines'; } catch(e) {}\nif (failedStep === 'unknown step') failedStep = 'Upsert GHL Contact';\n\n// Extract real HTTP error details\nconst statusCode = error.statusCode || error.code || error.status || '';\nconst responseBody = error.body || error.responseBody || error.response?.body || '';\nconst errorMsg = error.message || '';\nconst fullDump = JSON.stringify(error, null, 2);\n\nconst summary = [\n  `FAILED STEP: ${failedStep}`,\n  statusCode ? `HTTP Status: ${statusCode}` : '',\n  errorMsg ? `Message: ${errorMsg}` : '',\n  responseBody ? `Response Body: ${typeof responseBody === 'string' ? responseBody : JSON.stringify(responseBody)}` : '',\n  `Full error: ${fullDump}`\n].filter(Boolean).join('\\n');\n\nconsole.error(summary);\n\nreturn [{\n  json: {\n    success: false,\n    failedStep,\n    statusCode,\n    errorMessage: errorMsg,\n    responseBody,\n    leadEmail: leadData.email,\n    leadName,\n    fullError: error,\n    message: `Failed at \"${failedStep}\" for ${leadName}`\n  }\n}];"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -298,6 +299,13 @@
         [
           {
             "node": "Add to Pipeline",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Log Error",
             "type": "main",
             "index": 0
           }
