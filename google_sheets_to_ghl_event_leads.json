@@ -93,7 +93,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Extract the contact ID from the upsert response\n// Upsert returns { contact: { id, ... }, new: true/false }\nconst response = $input.first().json;\nconst contactId = response.contact?.id || response.id;\nconst isNew = response.new !== undefined ? response.new : true;\nconst leadData = $('Map Lead Fields').first().json;\n\nif (!contactId) {\n  throw new Error('Failed to get contact ID from GHL response: ' + JSON.stringify(response));\n}\n\nreturn [{\n  json: {\n    contactId,\n    isNewContact: isNew,\n    firstName: leadData.firstName,\n    lastName: leadData.lastName,\n    email: leadData.email,\n    eventName: leadData.eventName,\n    source: leadData.source\n  }\n}];"
+        "jsCode": "// Extract the contact ID from the upsert response\nconst response = $input.first().json;\nconst contactId = response.contact?.id || response.id;\nconst isNew = response.new !== undefined ? response.new : true;\nconst leadData = $('Map Lead Fields').first().json;\n\nif (!contactId) {\n  throw new Error('Failed to get contact ID from GHL response: ' + JSON.stringify(response));\n}\n\nreturn [{\n  json: {\n    contactId,\n    isNewContact: isNew,\n    firstName: leadData.firstName,\n    lastName: leadData.lastName,\n    email: leadData.email,\n    eventName: leadData.eventName,\n    source: leadData.source\n  }\n}];"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -103,6 +103,61 @@
       ],
       "id": "c1a1b2c3-0001-4000-8000-000000000001",
       "name": "Extract Contact ID"
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://services.leadconnectorhq.com/opportunities/pipelines",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Version",
+              "value": "2021-07-28"
+            }
+          ]
+        },
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "locationId",
+              "value": "9oW28j2SxdPAmUhO5MDI"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -1280,
+        400
+      ],
+      "id": "a1b2c3d4-0001-4000-8000-000000000010",
+      "name": "Get Pipelines",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "3b0eYre7glPN4d2r",
+          "name": "Header Auth account"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const pipelinesResponse = $input.first().json;\nconst contactData = $('Extract Contact ID').first().json;\n\n// Check if we got a valid pipelines response\nconst pipelines = pipelinesResponse.pipelines || [];\nif (pipelines.length === 0) {\n  throw new Error('No pipelines found. Your API token likely needs the \"opportunities.write\" and \"opportunities.readonly\" scopes. Go to GHL Settings > Integrations > your Private Integration > Scopes and enable them, then re-authorize.');\n}\n\n// Validate pipeline ID\nconst targetPipelineId = 'DEs336XJX4T8J1orIqYm';\nconst pipeline = pipelines.find(p => p.id === targetPipelineId);\nif (!pipeline) {\n  const available = pipelines.map(p => `${p.name} (${p.id})`).join(', ');\n  throw new Error(`Pipeline ID \"${targetPipelineId}\" not found. Available pipelines: ${available}`);\n}\n\n// Validate stage ID\nconst targetStageId = 'ec805333-bd77-4346-bc77-844b7126ea9c';\nconst stages = pipeline.stages || [];\nconst stage = stages.find(s => s.id === targetStageId);\nif (!stage) {\n  const available = stages.map(s => `${s.name} (${s.id})`).join(', ');\n  throw new Error(`Stage ID \"${targetStageId}\" not found in pipeline \"${pipeline.name}\". Available stages: ${available}`);\n}\n\nreturn [{\n  json: {\n    ...contactData,\n    pipelineId: targetPipelineId,\n    pipelineStageId: targetStageId,\n    pipelineName: pipeline.name,\n    stageName: stage.name\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1040,
+        400
+      ],
+      "id": "a1b2c3d4-0001-4000-8000-000000000011",
+      "name": "Validate Pipeline"
     },
     {
       "parameters": {
@@ -121,13 +176,13 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ \"pipelineId\": \"DEs336XJX4T8J1orIqYm\", \"pipelineStageId\": \"ec805333-bd77-4346-bc77-844b7126ea9c\", \"locationId\": \"9oW28j2SxdPAmUhO5MDI\", \"contactId\": $json.contactId, \"name\": ($json.firstName || '') + ' ' + ($json.lastName || '') + ' - ' + ($json.eventName || 'Event Lead'), \"source\": $json.source, \"status\": \"open\" }) }}",
+        "jsonBody": "={{ JSON.stringify({ \"pipelineId\": $json.pipelineId, \"pipelineStageId\": $json.pipelineStageId, \"locationId\": \"9oW28j2SxdPAmUhO5MDI\", \"contactId\": $json.contactId, \"name\": ($json.firstName || '') + ' ' + ($json.lastName || '') + ' - ' + ($json.eventName || 'Event Lead'), \"status\": \"open\" }) }}",
         "options": {}
       },
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        -1280,
+        -800,
         400
       ],
       "id": "15d21902-c9f6-418e-ac30-58efd5cc4cc6",
@@ -147,7 +202,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -1040,
+        -560,
         300
       ],
       "id": "d888ea01-e04a-45f8-9cb1-8ae3d28a84c7",
@@ -160,7 +215,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -1040,
+        -560,
         560
       ],
       "id": "28d839e2-e655-4a19-86bb-d73dd8fa3633",
@@ -210,6 +265,35 @@
       ]
     },
     "Extract Contact ID": {
+      "main": [
+        [
+          {
+            "node": "Get Pipelines",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Pipelines": {
+      "main": [
+        [
+          {
+            "node": "Validate Pipeline",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Log Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Pipeline": {
       "main": [
         [
           {
