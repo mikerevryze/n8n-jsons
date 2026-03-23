@@ -107,7 +107,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "https://services.leadconnectorhq.com/opportunities/",
+        "url": "https://services.leadconnectorhq.com/opportunities",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth",
         "sendHeaders": true,
@@ -121,7 +121,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ \"pipelineId\": \"DEs336XJX4T8J1orIqYm\", \"pipelineStageId\": \"ec805333-bd77-4346-bc77-844b7126ea9c\", \"locationId\": \"9oW28j2SxdPAmUhO5MDI\", \"contactId\": $json.contactId, \"name\": ($json.firstName || '') + ' ' + ($json.lastName || '') + ' - ' + ($json.eventName || 'Event Lead'), \"source\": $json.source, \"status\": \"open\" }) }}",
+        "jsonBody": "={{ JSON.stringify({ \"pipelineId\": \"DEs336XJX4T8J1orIqYm\", \"pipelineStageId\": \"ec805333-bd77-4346-bc77-844b7126ea9c\", \"contactId\": $json.contactId, \"name\": ($json.firstName || '') + ' ' + ($json.lastName || '') + ' - ' + ($json.eventName || 'Event Lead'), \"status\": \"open\" }) }}",
         "options": {}
       },
       "type": "n8n-nodes-base.httpRequest",
