@@ -12,115 +12,162 @@
         },
         "documentId": {
           "__rl": true,
-          "value": "",
+          "value": "1GQI62TCY8ZFb8Uh-fJTcOkpMGb2WV5oehAsS5cUfT3U",
           "mode": "list",
-          "cachedResultName": ""
+          "cachedResultName": "Get STRONGer at STRONG Pilates Lakeview (Responses)",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1GQI62TCY8ZFb8Uh-fJTcOkpMGb2WV5oehAsS5cUfT3U/edit?usp=drivesdk"
         },
         "sheetName": {
           "__rl": true,
-          "value": "",
+          "value": 2049338531,
           "mode": "list",
-          "cachedResultName": ""
+          "cachedResultName": "Form Responses 1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1GQI62TCY8ZFb8Uh-fJTcOkpMGb2WV5oehAsS5cUfT3U/edit#gid=2049338531"
         },
         "event": "rowAdded",
         "options": {}
       },
       "type": "n8n-nodes-base.googleSheetsTrigger",
       "typeVersion": 1,
-      "position": [220, 300],
-      "id": "b2c3d4e5-0001-4000-8000-000000000001",
+      "position": [
+        -2240,
+        512
+      ],
+      "id": "7f098cf7-bf7e-4a40-b4f9-97de62e5371b",
       "name": "Google Sheets Trigger",
       "credentials": {
-        "googleSheetsOAuth2Api": {
-          "id": "",
-          "name": ""
+        "googleSheetsTriggerOAuth2Api": {
+          "id": "bkaSFypd1yyz4P90",
+          "name": "Google Sheets Trigger account"
         }
       }
     },
     {
       "parameters": {
-        "jsCode": "// Map Google Form/Sheet columns to GHL contact fields\n// Update the field names below to match your Google Sheet column headers\nconst row = $input.first().json;\n\nconst firstName = row['First Name'] || row['first_name'] || row['firstName'] || '';\nconst lastName = row['Last Name'] || row['last_name'] || row['lastName'] || '';\nconst email = row['Email'] || row['email'] || row['Email Address'] || '';\nconst phone = row['Phone'] || row['phone'] || row['Phone Number'] || '';\nconst eventName = row['Event Name'] || row['event_name'] || row['Event'] || '';\nconst notes = row['Notes'] || row['notes'] || row['Comments'] || '';\nconst timestamp = row['Timestamp'] || row['timestamp'] || new Date().toISOString();\n\nif (!email && !phone) {\n  throw new Error('Lead must have at least an email or phone number');\n}\n\nreturn [{\n  json: {\n    firstName,\n    lastName,\n    email,\n    phone,\n    eventName,\n    notes,\n    timestamp,\n    source: 'Google Form - Event Lead'\n  }\n}];"
+        "jsCode": "// Map Google Form/Sheet columns to GHL contact fields\nconst row = $input.first().json;\n\nconst firstName = row['First Name'] || row['first_name'] || row['firstName'] || '';\nconst lastName = row['Last Name'] || row['last_name'] || row['lastName'] || '';\nconst email = (row['Email'] || row['email'] || row['Email Address'] || '').toString().trim().toLowerCase();\nconst rawPhone = String(row['Phone'] || row['phone'] || row['Phone Number'] || '');\nconst phone = rawPhone.replace(/[^\\d+]/g, '');\nconst eventName = row['Event Name'] || row['event_name'] || row['Event'] || '';\nconst notes = row['Notes'] || row['notes'] || row['Comments'] || '';\nconst timestamp = row['Timestamp'] || row['timestamp'] || new Date().toISOString();\n\nif (!email && !phone) {\n  throw new Error('Lead must have at least an email or phone number');\n}\n\nreturn [{\n  json: {\n    firstName,\n    lastName,\n    email,\n    phone,\n    eventName,\n    notes,\n    timestamp,\n    source: 'Google Form - Event Lead'\n  }\n}];"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [460, 300],
-      "id": "b2c3d4e5-0002-4000-8000-000000000002",
+      "position": [
+        -2000,
+        512
+      ],
+      "id": "df78401a-c9ef-4fb7-bea7-5511db6d874d",
       "name": "Map Lead Fields"
     },
     {
       "parameters": {
-        "requestMethod": "POST",
-        "url": "https://services.leadconnectorhq.com/contacts/",
+        "method": "POST",
+        "url": "https://services.leadconnectorhq.com/contacts/upsert",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth",
-        "options": {
-          "bodyContentType": "json"
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Version",
+              "value": "2021-07-28"
+            }
+          ]
         },
-        "jsonParameters": true,
-        "bodyParametersJson": "={{ JSON.stringify({ \"firstName\": $json.firstName, \"lastName\": $json.lastName, \"email\": $json.email, \"phone\": $json.phone, \"locationId\": \"YOUR_GHL_LOCATION_ID\", \"source\": $json.source, \"tags\": [\"event-lead\", $json.eventName], \"customFields\": [{ \"key\": \"event_name\", \"field_value\": $json.eventName }, { \"key\": \"event_notes\", \"field_value\": $json.notes }, { \"key\": \"form_submitted_at\", \"field_value\": $json.timestamp }] }) }}"
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ \"firstName\": $json.firstName, \"lastName\": $json.lastName, \"email\": $json.email, \"phone\": $json.phone, \"locationId\": \"9oW28j2SxdPAmUhO5MDI\", \"source\": $json.source, \"tags\": [\"event lead\", $json.eventName], \"customFields\": [{ \"key\": \"event_name\", \"field_value\": $json.eventName }, { \"key\": \"event_notes\", \"field_value\": $json.notes }, { \"key\": \"form_submitted_at\", \"field_value\": $json.timestamp }] }) }}",
+        "options": {}
       },
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [700, 200],
-      "id": "b2c3d4e5-0003-4000-8000-000000000003",
-      "name": "Create GHL Contact",
+      "position": [
+        -1760,
+        512
+      ],
+      "id": "aabecacb-1a6c-4246-a699-efc256269ff5",
+      "name": "Upsert GHL Contact",
       "credentials": {
         "httpHeaderAuth": {
-          "id": "",
-          "name": "GHL API Key"
+          "id": "3b0eYre7glPN4d2r",
+          "name": "Header Auth account"
         }
-      }
-    },
-    {
-      "parameters": {
-        "conditions": {
-          "options": {
-            "caseSensitive": false,
-            "leftValue": "",
-            "typeValidation": "strict"
-          },
-          "conditions": [
-            {
-              "id": "condition-success-check",
-              "leftValue": "={{ $json.statusCode }}",
-              "rightValue": "400",
-              "operator": {
-                "type": "number",
-                "operation": "lt"
-              }
-            }
-          ],
-          "combinator": "and"
-        },
-        "options": {}
       },
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 2,
-      "position": [940, 200],
-      "id": "b2c3d4e5-0004-4000-8000-000000000004",
-      "name": "Check Success"
+      "onError": "continueErrorOutput"
     },
     {
       "parameters": {
-        "jsCode": "const contact = $input.first().json;\nconst contactId = contact.body?.contact?.id || contact.body?.id || 'unknown';\n\nconsole.log(`Successfully created GHL contact: ${contactId}`);\n\nreturn [{\n  json: {\n    success: true,\n    contactId,\n    message: `Lead created in GHL: ${$('Map Lead Fields').first().json.firstName} ${$('Map Lead Fields').first().json.lastName}`\n  }\n}];"
+        "jsCode": "// Extract the contact ID from the upsert response\n// Upsert returns { contact: { id, ... }, new: true/false }\nconst response = $input.first().json;\nconst contactId = response.contact?.id || response.id;\nconst isNew = response.new !== undefined ? response.new : true;\nconst leadData = $('Map Lead Fields').first().json;\n\nif (!contactId) {\n  throw new Error('Failed to get contact ID from GHL response: ' + JSON.stringify(response));\n}\n\nreturn [{\n  json: {\n    contactId,\n    isNewContact: isNew,\n    firstName: leadData.firstName,\n    lastName: leadData.lastName,\n    email: leadData.email,\n    eventName: leadData.eventName,\n    source: leadData.source\n  }\n}];"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1180, 100],
-      "id": "b2c3d4e5-0005-4000-8000-000000000005",
+      "position": [
+        -1520,
+        400
+      ],
+      "id": "c1a1b2c3-0001-4000-8000-000000000001",
+      "name": "Extract Contact ID"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://services.leadconnectorhq.com/opportunities",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Version",
+              "value": "2021-07-28"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ \"pipelineId\": \"DEs336XJX4T8J1orIqYm\", \"pipelineStageId\": \"ec805333-bd77-4346-bc77-844b7126ea9c\", \"locationId\": \"9oW28j2SxdPAmUhO5MDI\", \"contactId\": $json.contactId, \"name\": ($json.firstName || '') + ' ' + ($json.lastName || '') + ' - ' + ($json.eventName || 'Event Lead'), \"source\": $json.source, \"status\": \"open\" }) }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -1280,
+        400
+      ],
+      "id": "15d21902-c9f6-418e-ac30-58efd5cc4cc6",
+      "name": "Add to Pipeline",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "3b0eYre7glPN4d2r",
+          "name": "Header Auth account"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const opportunity = $input.first().json;\nconst contactData = $('Extract Contact ID').first().json;\nconst oppId = opportunity.opportunity?.id || opportunity.id || 'unknown';\nconst action = contactData.isNewContact ? 'Created new' : 'Updated existing';\n\nconsole.log(`${action} GHL contact ${contactData.contactId} and opportunity ${oppId}`);\n\nreturn [{\n  json: {\n    success: true,\n    contactId: contactData.contactId,\n    isNewContact: contactData.isNewContact,\n    opportunityId: oppId,\n    message: `${action} lead and added to pipeline: ${contactData.firstName} ${contactData.lastName}`\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1040,
+        300
+      ],
+      "id": "d888ea01-e04a-45f8-9cb1-8ae3d28a84c7",
       "name": "Log Success"
     },
     {
       "parameters": {
-        "jsCode": "const error = $input.first().json;\nconst leadEmail = $('Map Lead Fields').first().json.email;\nconst leadName = `${$('Map Lead Fields').first().json.firstName} ${$('Map Lead Fields').first().json.lastName}`;\n\nconsole.error(`Failed to create GHL contact for ${leadName} (${leadEmail})`);\nconsole.error(JSON.stringify(error, null, 2));\n\nreturn [{\n  json: {\n    success: false,\n    error: error.body || error,\n    leadEmail,\n    leadName,\n    message: `Failed to create lead: ${leadName}`\n  }\n}];"
+        "jsCode": "const error = $input.first().json;\nconst leadData = $('Map Lead Fields').first().json;\nconst leadName = `${leadData.firstName} ${leadData.lastName}`;\nconst errorDetail = error.message || error.body || JSON.stringify(error);\n\nconsole.error(`Failed for ${leadName} (${leadData.email}): ${errorDetail}`);\n\nreturn [{\n  json: {\n    success: false,\n    error: errorDetail,\n    leadEmail: leadData.email,\n    leadName,\n    message: `Failed to process lead: ${leadName}`\n  }\n}];"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1180, 300],
-      "id": "b2c3d4e5-0006-4000-8000-000000000006",
+      "position": [
+        -1040,
+        560
+      ],
+      "id": "28d839e2-e655-4a19-86bb-d73dd8fa3633",
       "name": "Log Error"
     }
   ],
+  "pinData": {},
   "connections": {
     "Google Sheets Trigger": {
       "main": [
@@ -137,25 +184,43 @@
       "main": [
         [
           {
-            "node": "Create GHL Contact",
+            "node": "Upsert GHL Contact",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Create GHL Contact": {
+    "Upsert GHL Contact": {
       "main": [
         [
           {
-            "node": "Check Success",
+            "node": "Extract Contact ID",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Log Error",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Check Success": {
+    "Extract Contact ID": {
+      "main": [
+        [
+          {
+            "node": "Add to Pipeline",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Add to Pipeline": {
       "main": [
         [
           {
@@ -174,11 +239,17 @@
       ]
     }
   },
-  "pinData": {},
+  "active": true,
   "settings": {
-    "executionOrder": "v1"
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
   },
-  "staticData": null,
-  "tags": [],
-  "triggerCount": 1
+  "versionId": "463bfa91-e1cd-4d82-9fea-538f523babab",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "0dd792e002b291da0dbecf5d75bc1f54e16c0266d8f8277263d78abbb783f658"
+  },
+  "id": "Tfn9whS8ChhPlQmh",
+  "tags": []
 }
