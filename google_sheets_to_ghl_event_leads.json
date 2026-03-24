@@ -162,6 +162,102 @@
     },
     {
       "parameters": {
+        "method": "GET",
+        "url": "https://services.leadconnectorhq.com/opportunities/search",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Version",
+              "value": "2021-07-28"
+            }
+          ]
+        },
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "location_id",
+              "value": "9oW28j2SxdPAmUhO5MDI"
+            },
+            {
+              "name": "pipeline_id",
+              "value": "DEs336XJX4T8J1orIqYm"
+            },
+            {
+              "name": "contact_id",
+              "value": "={{ $json.contactId }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -800,
+        400
+      ],
+      "id": "b1c2d3e4-0001-4000-8000-000000000020",
+      "name": "Search Existing Opportunities",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "3b0eYre7glPN4d2r",
+          "name": "Header Auth account"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const searchResponse = $input.first().json;\nconst contactData = $('Validate Pipeline').first().json;\n\n// Check if opportunities already exist for this contact in this pipeline\nconst opportunities = searchResponse.opportunities || [];\nconst existingOpp = opportunities.find(o => o.pipelineId === contactData.pipelineId);\n\nif (existingOpp) {\n  // Already has an opportunity — skip creation\n  return [{\n    json: {\n      ...contactData,\n      existingOpportunityId: existingOpp.id,\n      alreadyExists: true\n    }\n  }];\n} else {\n  // No existing opportunity — needs creation\n  return [{\n    json: {\n      ...contactData,\n      alreadyExists: false\n    }\n  }];\n}"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -560,
+        400
+      ],
+      "id": "b1c2d3e4-0001-4000-8000-000000000021",
+      "name": "Check If Opportunity Exists"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "condition-opp-exists",
+              "leftValue": "={{ $json.alreadyExists }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        -320,
+        400
+      ],
+      "id": "b1c2d3e4-0001-4000-8000-000000000022",
+      "name": "Opportunity Exists?"
+    },
+    {
+      "parameters": {
         "method": "POST",
         "url": "https://services.leadconnectorhq.com/opportunities/",
         "authentication": "genericCredentialType",
@@ -183,8 +279,8 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        -800,
-        400
+        -80,
+        500
       ],
       "id": "15d21902-c9f6-418e-ac30-58efd5cc4cc6",
       "name": "Add to Pipeline",
@@ -198,12 +294,12 @@
     },
     {
       "parameters": {
-        "jsCode": "const opportunity = $input.first().json;\nconst contactData = $('Extract Contact ID').first().json;\nconst oppId = opportunity.opportunity?.id || opportunity.id || 'unknown';\nconst action = contactData.isNewContact ? 'Created new' : 'Updated existing';\n\nconsole.log(`${action} GHL contact ${contactData.contactId} and opportunity ${oppId}`);\n\nreturn [{\n  json: {\n    success: true,\n    contactId: contactData.contactId,\n    isNewContact: contactData.isNewContact,\n    opportunityId: oppId,\n    message: `${action} lead and added to pipeline: ${contactData.firstName} ${contactData.lastName}`\n  }\n}];"
+        "jsCode": "const input = $input.first().json;\nconst contactData = $('Check If Opportunity Exists').first().json;\nconst isNew = contactData.isNewContact;\nconst action = isNew ? 'Created new' : 'Updated existing';\n\n// Determine opportunity ID — either from newly created or existing\nlet oppId;\nif (contactData.alreadyExists) {\n  oppId = contactData.existingOpportunityId;\n} else {\n  oppId = input.opportunity?.id || input.id || 'unknown';\n}\n\nreturn [{\n  json: {\n    success: true,\n    contactId: contactData.contactId,\n    isNewContact: isNew,\n    opportunityId: oppId,\n    opportunityAlreadyExisted: contactData.alreadyExists || false,\n    message: `${action} lead ${contactData.alreadyExists ? '(opportunity already existed)' : 'and added to pipeline'}: ${contactData.firstName} ${contactData.lastName}`\n  }\n}];"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -560,
+        160,
         300
       ],
       "id": "d888ea01-e04a-45f8-9cb1-8ae3d28a84c7",
@@ -211,12 +307,12 @@
     },
     {
       "parameters": {
-        "jsCode": "const error = $input.first().json;\nconst leadData = $('Map Lead Fields').first().json;\nconst leadName = `${leadData.firstName} ${leadData.lastName}`;\n\n// Figure out which step actually failed\nlet failedStep = 'unknown step';\ntry { $('Add to Pipeline').first(); failedStep = 'Add to Pipeline'; } catch(e) {}\ntry { $('Validate Pipeline').first(); if (failedStep === 'unknown step') failedStep = 'Validate Pipeline'; } catch(e) {}\ntry { $('Get Pipelines').first(); if (failedStep === 'unknown step') failedStep = 'Get Pipelines'; } catch(e) {}\nif (failedStep === 'unknown step') failedStep = 'Upsert GHL Contact';\n\n// Extract real HTTP error details\nconst statusCode = error.statusCode || error.code || error.status || '';\nconst responseBody = error.body || error.responseBody || error.response?.body || '';\nconst errorMsg = error.message || '';\nconst fullDump = JSON.stringify(error, null, 2);\n\nconst summary = [\n  `FAILED STEP: ${failedStep}`,\n  statusCode ? `HTTP Status: ${statusCode}` : '',\n  errorMsg ? `Message: ${errorMsg}` : '',\n  responseBody ? `Response Body: ${typeof responseBody === 'string' ? responseBody : JSON.stringify(responseBody)}` : '',\n  `Full error: ${fullDump}`\n].filter(Boolean).join('\\n');\n\nconsole.error(summary);\n\nreturn [{\n  json: {\n    success: false,\n    failedStep,\n    statusCode,\n    errorMessage: errorMsg,\n    responseBody,\n    leadEmail: leadData.email,\n    leadName,\n    fullError: error,\n    message: `Failed at \"${failedStep}\" for ${leadName}`\n  }\n}];"
+        "jsCode": "const error = $input.first().json;\nconst leadData = $('Map Lead Fields').first().json;\nconst leadName = `${leadData.firstName} ${leadData.lastName}`;\n\n// Figure out which step actually failed\nlet failedStep = 'unknown step';\ntry { $('Add to Pipeline').first(); failedStep = 'Add to Pipeline'; } catch(e) {}\ntry { $('Search Existing Opportunities').first(); if (failedStep === 'unknown step') failedStep = 'Search Existing Opportunities'; } catch(e) {}\ntry { $('Validate Pipeline').first(); if (failedStep === 'unknown step') failedStep = 'Validate Pipeline'; } catch(e) {}\ntry { $('Get Pipelines').first(); if (failedStep === 'unknown step') failedStep = 'Get Pipelines'; } catch(e) {}\nif (failedStep === 'unknown step') failedStep = 'Upsert GHL Contact';\n\n// Extract real HTTP error details\nconst statusCode = error.statusCode || error.code || error.status || '';\nconst responseBody = error.body || error.responseBody || error.response?.body || '';\nconst errorMsg = error.message || '';\nconst fullDump = JSON.stringify(error, null, 2);\n\nconst summary = [\n  `FAILED STEP: ${failedStep}`,\n  statusCode ? `HTTP Status: ${statusCode}` : '',\n  errorMsg ? `Message: ${errorMsg}` : '',\n  responseBody ? `Response Body: ${typeof responseBody === 'string' ? responseBody : JSON.stringify(responseBody)}` : '',\n  `Full error: ${fullDump}`\n].filter(Boolean).join('\\n');\n\nconsole.error(summary);\n\nreturn [{\n  json: {\n    success: false,\n    failedStep,\n    statusCode,\n    errorMessage: errorMsg,\n    responseBody,\n    leadEmail: leadData.email,\n    leadName,\n    fullError: error,\n    message: `Failed at \"${failedStep}\" for ${leadName}`\n  }\n}];"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -560,
+        160,
         560
       ],
       "id": "28d839e2-e655-4a19-86bb-d73dd8fa3633",
@@ -298,7 +394,7 @@
       "main": [
         [
           {
-            "node": "Add to Pipeline",
+            "node": "Search Existing Opportunities",
             "type": "main",
             "index": 0
           }
@@ -306,6 +402,53 @@
         [
           {
             "node": "Log Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Search Existing Opportunities": {
+      "main": [
+        [
+          {
+            "node": "Check If Opportunity Exists",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Log Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check If Opportunity Exists": {
+      "main": [
+        [
+          {
+            "node": "Opportunity Exists?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Opportunity Exists?": {
+      "main": [
+        [
+          {
+            "node": "Log Success",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Add to Pipeline",
             "type": "main",
             "index": 0
           }
